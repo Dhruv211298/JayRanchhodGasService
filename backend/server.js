@@ -17,7 +17,10 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  dateStrings: true  // Always return DATE/DATETIME as strings, prevents timezone mismatch
+  dateStrings: true,
+  // Disable ANSI_QUOTES so double-quoted strings work as strings not identifiers
+  connectAttributes: { program_name: 'gas-agency' },
+  initializationQuery: "SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
 });
 
 // Helper: safe number
@@ -46,7 +49,7 @@ app.get('/api/load', async (req, res) => {
     // 5. Load Pending Credits
     const [ledgerRows] = await pool.query(`SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as date, customer_name as customerName, original_amount as originalAmt, cleared FROM credit_ledger`);
     const [paymentRows] = await pool.query(`
-      SELECT p.ledger_id, DATE_FORMAT(p.payment_date, "%Y-%m-%d") as date, p.amount as amt, p.note, l.customer_name as customerName 
+      SELECT p.ledger_id, DATE_FORMAT(p.payment_date, '%Y-%m-%d') as date, p.amount as amt, p.note, l.customer_name as customerName 
       FROM credit_payments p 
       LEFT JOIN credit_ledger l ON p.ledger_id = l.id
     `);
