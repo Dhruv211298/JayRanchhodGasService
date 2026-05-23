@@ -30,10 +30,10 @@ app.get('/api/load', async (req, res) => {
   try {
     // 1. Load Master Data
     const [productsRows] = await pool.query('SELECT id FROM products');
-    const [pricesRows] = await pool.query('SELECT id, product_id as productId, DATE_FORMAT(effective_date, "%Y-%m-%d") as date, rate, sbc_rate as sbcRate, dbc_rate as dbcRate, note FROM price_history');
+    const [pricesRows] = await pool.query(`SELECT id, product_id as productId, DATE_FORMAT(effective_date, '%Y-%m-%d') as date, rate, sbc_rate as sbcRate, dbc_rate as dbcRate, note FROM price_history`);
     
     // 2. Load Commissions
-    const [commRows] = await pool.query('SELECT id, product_id as productId, DATE_FORMAT(effective_date, "%Y-%m-%d") as date, per_cyl_rate as perCyl, note FROM commission_history');
+    const [commRows] = await pool.query(`SELECT id, product_id as productId, DATE_FORMAT(effective_date, '%Y-%m-%d') as date, per_cyl_rate as perCyl, note FROM commission_history`);
     
     // 3. Load Employees (for dropdowns)
     const [empRows] = await pool.query('SELECT id, name, role, salary FROM employees WHERE is_active = 1 ORDER BY name ASC');
@@ -44,7 +44,7 @@ app.get('/api/load', async (req, res) => {
     const [vehicleRows] = await pool.query('SELECT id, vehicle_no, type, capacity FROM vehicles WHERE is_active = 1 ORDER BY sort_order ASC, id ASC');
     
     // 5. Load Pending Credits
-    const [ledgerRows] = await pool.query('SELECT id, DATE_FORMAT(entry_date, "%Y-%m-%d") as date, customer_name as customerName, original_amount as originalAmt, cleared FROM credit_ledger');
+    const [ledgerRows] = await pool.query(`SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as date, customer_name as customerName, original_amount as originalAmt, cleared FROM credit_ledger`);
     const [paymentRows] = await pool.query(`
       SELECT p.ledger_id, DATE_FORMAT(p.payment_date, "%Y-%m-%d") as date, p.amount as amt, p.note, l.customer_name as customerName 
       FROM credit_payments p 
@@ -66,17 +66,17 @@ app.get('/api/load', async (req, res) => {
     });
 
     // 6. Load Daily Entries
-    const [entriesRows] = await pool.query('SELECT DATE_FORMAT(entry_date, "%Y-%m-%d") as date, opening_cash as openingCash, bob_bank as bob, has_vehicle_arrival as hasArrival FROM daily_entries');
-    const [prodStockRows] = await pool.query('SELECT DATE_FORMAT(entry_date, "%Y-%m-%d") as entry_date, product_id as id, opening_stock as openingStock, rate, sbc_rate as sbcRate, dbc_rate as dbcRate, sell_qty as sell, online_qty as online, sbc_qty as sbc, dbc_qty as dbc, closing_stock as closingStock, remarks FROM daily_product_stock');
-    const [deliveryRows] = await pool.query('SELECT d.cash_qty, d.online_qty, d.qty_delivered, DATE_FORMAT(d.entry_date, "%Y-%m-%d") as entry_date, b.name FROM daily_deliveries d JOIN employees b ON d.delivery_boy_id = b.id');
-    const [expRows] = await pool.query('SELECT id, DATE_FORMAT(entry_date, "%Y-%m-%d") as entry_date, description as `desc`, amount as amt FROM daily_expenses');
-    const [chequeRows] = await pool.query('SELECT id, DATE_FORMAT(entry_date, "%Y-%m-%d") as entry_date, description as `desc`, amount as amt FROM daily_cheque_online');
-    const [creditSalesRows] = await pool.query('SELECT id, DATE_FORMAT(entry_date, "%Y-%m-%d") as entry_date, customer_name as customerName, original_amount as amt FROM credit_ledger');
-    const [vehExpRows] = await pool.query('SELECT dve.id, DATE_FORMAT(dve.entry_date, "%Y-%m-%d") as entry_date, dve.vehicle_id as vehicleId, COALESCE(v.vehicle_no, "") as vehicleNo, dve.expense_type as expType, dve.description as `desc`, dve.amount as amt FROM daily_vehicle_expenses dve LEFT JOIN vehicles v ON dve.vehicle_id = v.id');
-    const [salPayRows] = await pool.query('SELECT sp.id, DATE_FORMAT(sp.entry_date, "%Y-%m-%d") as entry_date, sp.employee_id as employeeId, e.name as employeeName, sp.amount as amt, sp.type, sp.notes FROM employee_payments sp JOIN employees e ON sp.employee_id = e.id');
-    const [godownRows] = await pool.query('SELECT DATE_FORMAT(entry_date, "%Y-%m-%d") as entry_date, product_id as productId, filled_qty as filled, empty_qty as empty FROM godown_stock');
-    const [arrivalRows] = await pool.query('SELECT DATE_FORMAT(entry_date, "%Y-%m-%d") as entry_date, product_id as productId, filled_received as filledReceived, empty_returned as emptyReturned FROM vehicle_arrivals');
-    const [accRows] = await pool.query('SELECT DATE_FORMAT(entry_date, "%Y-%m-%d") as entry_date, accessory_id as accessoryId, qty, rate FROM daily_accessory_sales');
+    const [entriesRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as date, opening_cash as openingCash, bob_bank as bob, has_vehicle_arrival as hasArrival FROM daily_entries`);
+    const [prodStockRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, product_id as id, opening_stock as openingStock, rate, sbc_rate as sbcRate, dbc_rate as dbcRate, sell_qty as sell, online_qty as online, sbc_qty as sbc, dbc_qty as dbc, closing_stock as closingStock, remarks FROM daily_product_stock`);
+    const [deliveryRows] = await pool.query(`SELECT d.cash_qty, d.online_qty, d.qty_delivered, DATE_FORMAT(d.entry_date, '%Y-%m-%d') as entry_date, b.name FROM daily_deliveries d JOIN employees b ON d.delivery_boy_id = b.id`);
+    const [expRows] = await pool.query("SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, description as `desc`, amount as amt FROM daily_expenses");
+    const [chequeRows] = await pool.query("SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, description as `desc`, amount as amt FROM daily_cheque_online");
+    const [creditSalesRows] = await pool.query(`SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, customer_name as customerName, original_amount as amt FROM credit_ledger`);
+    const [vehExpRows] = await pool.query("SELECT dve.id, DATE_FORMAT(dve.entry_date, '%Y-%m-%d') as entry_date, dve.vehicle_id as vehicleId, COALESCE(v.vehicle_no, '') as vehicleNo, dve.expense_type as expType, dve.description as `desc`, dve.amount as amt FROM daily_vehicle_expenses dve LEFT JOIN vehicles v ON dve.vehicle_id = v.id");
+    const [salPayRows] = await pool.query(`SELECT sp.id, DATE_FORMAT(sp.entry_date, '%Y-%m-%d') as entry_date, sp.employee_id as employeeId, e.name as employeeName, sp.amount as amt, sp.type, sp.notes FROM employee_payments sp JOIN employees e ON sp.employee_id = e.id`);
+    const [godownRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, product_id as productId, filled_qty as filled, empty_qty as empty FROM godown_stock`);
+    const [arrivalRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, product_id as productId, filled_received as filledReceived, empty_returned as emptyReturned FROM vehicle_arrivals`);
+    const [accRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, accessory_id as accessoryId, qty, rate FROM daily_accessory_sales`);
 
     const entries = entriesRows.map(e => {
       const date = e.date;
@@ -510,7 +510,7 @@ app.delete('/api/vehicles/:id', async (req, res) => {
 ════════════════════════════════════════════════════════════════ */
 app.get('/api/employees', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT id, name, role, salary, phone, DATE_FORMAT(join_date, "%Y-%m-%d") as join_date, notes, is_active FROM employees ORDER BY name ASC');
+    const [rows] = await pool.query(`SELECT id, name, role, salary, phone, DATE_FORMAT(join_date, '%Y-%m-%d') as join_date, notes, is_active FROM employees ORDER BY name ASC`);
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -600,3 +600,4 @@ app.post('/api/godown-stock', async (req, res) => {
 
 const PORT = 3001;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+
