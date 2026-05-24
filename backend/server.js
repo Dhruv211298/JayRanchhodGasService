@@ -18,9 +18,17 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   dateStrings: true,
-  // Disable ANSI_QUOTES so double-quoted strings work as strings not identifiers
-  connectAttributes: { program_name: 'gas-agency' },
-  initializationQuery: "SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
+  connectAttributes: { program_name: 'gas-agency' }
+});
+
+// Set SQL mode on every new connection to disable ANSI_QUOTES.
+// This ensures double-quoted values are NOT treated as identifiers on Aiven/cloud MySQL.
+// NOTE: initializationQuery is NOT supported by mysql2 — this pool event is the correct approach.
+pool.on('connection', (connection) => {
+  connection.query(
+    "SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
+    (err) => { if (err) console.error('Failed to set sql_mode on connection:', err.message); }
+  );
 });
 
 // Helper: safe number
