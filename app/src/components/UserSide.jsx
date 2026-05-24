@@ -9,7 +9,7 @@ import {
 
 const VEH_EXP_TYPES = ["Fuel", "Repair", "Maintenance", "Toll / Tax", "Washing", "Other"];
 
-export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved, entries, prices, deliveryBoys, vehicles, employees, pending }) {
+export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved, entries, prices, deliveryBoys, vehicles, employees, pending, isAdmin }) {
   const calcs = calcEntry(entry);
   const p14 = (entry.products || []).find(p => p.id === "p14") || {};
   const p14Rate = num(p14.rate);
@@ -70,13 +70,14 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
   const listSet = (key, id, field, val) =>
     setEntry((p) => ({ ...p, [key]: p[key].map((x) => x.id === id ? { ...x, [field]: val } : x) }));
 
-  const canEdit = entry.date === todayStr();
+  const canEdit = isAdmin ? true : entry.date === todayStr();
   const isEdit = entries.some((x) => x.date === entry.date) && entry.date !== todayStr();
 
   return (
     <div className="fade-in">
       {saved && <div className="alert alert-success">✅ Entry saved successfully!</div>}
       {!canEdit && <div className="alert alert-info">👁️ Viewing historical entry — Read-only mode</div>}
+      {isAdmin && entry.date !== todayStr() && <div className="alert alert-success">🔓 Admin Mode — Editing entry for {fmtDate(entry.date)}</div>}
 
       <div className="g3" style={{ marginBottom: 14 }}>
         <div className="card">
@@ -822,7 +823,7 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
   );
 }
 
-export function History({ entries, onEdit }) {
+export function History({ entries, onEdit, isAdmin }) {
   const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
   return (
     <div className="fade-in">
@@ -906,8 +907,8 @@ export function History({ entries, onEdit }) {
                       })}
                     </td>
                     <td style={{ border: `1px solid ${T.border}`, textAlign: "center", whiteSpace: "nowrap", padding: "0 8px" }}>
-                      <span style={{ display: "inline-flex", gap: 4, alignItems: "center", background: isToday ? T.ink : T.blueBg, color: isToday ? "#fff" : T.blue, padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
-                        {isToday ? "✏️ Edit" : "👁️ View"}
+                      <span style={{ display: "inline-flex", gap: 4, alignItems: "center", background: (isToday || isAdmin) ? T.ink : T.blueBg, color: (isToday || isAdmin) ? "#fff" : T.blue, padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                        {(isToday || isAdmin) ? "✏️ Edit" : "👁️ View"}
                       </span>
                     </td>
                   </tr>

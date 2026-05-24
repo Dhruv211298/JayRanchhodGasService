@@ -85,7 +85,7 @@ export default function App() {
     const savedRole = localStorage.getItem("authedRole");
     if (savedRole) {
       setAuthedRole(savedRole);
-      setTab(savedRole === "admin" ? "admin-dashboard" : "entry");
+      setTab(savedRole === "admin" ? "admin-entry" : "entry");
     }
     loadData();
   }, []);
@@ -154,7 +154,7 @@ export default function App() {
   if (!authedRole) return <LoginScreen onAuth={(r) => {
     localStorage.setItem("authedRole", r);
     setAuthedRole(r);
-    setTab(r === "admin" ? "admin-dashboard" : "entry");
+    setTab(r === "admin" ? "admin-entry" : "entry");
     loadData(); // Fresh load on login
   }} />;
 
@@ -167,6 +167,8 @@ export default function App() {
   ];
   
   const TABS_ADMIN = [
+    { id: "admin-entry", label: "📋 Daily Entry" },
+    { id: "admin-history", label: "📅 History" },
     { id: "admin-dashboard", label: "⬛ Dashboard" },
     { id: "admin-prices", label: "📈 Prices" },
     { id: "admin-comm", label: "💰 Commission" },
@@ -228,6 +230,8 @@ export default function App() {
         {tab === "salary" && <SalaryReport entries={entries} employees={employees} />}
 
         {/* Admin Tabs */}
+        {tab === "admin-entry" && <DailyEntry entry={entry} setEntry={setEntry} calcs={calcs} onSave={handleSave} saved={saved} entries={entries} prices={prices} deliveryBoys={deliveryBoys} vehicles={vehicles} employees={employees} pending={pending} isAdmin={true} />}
+        {tab === "admin-history" && <History entries={entries} onEdit={(e) => { setEntry(e); setTab("admin-entry"); }} isAdmin={true} />}
         {tab === "admin-dashboard" && <AdminDashboard entries={entries} pending={pending} prices={prices} commissions={commissions} />}
         {tab === "admin-prices" && <AdminPriceHistory prices={prices} setPrices={setPrices} />}
         {tab === "admin-comm" && <AdminCommission commissions={commissions} setCommissions={setCommissions} />}
