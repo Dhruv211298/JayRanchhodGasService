@@ -181,7 +181,7 @@ app.post('/api/entries', async (req, res) => {
 
     // 3. Process Deliveries (needs boy IDs from employees table)
     await connection.query('DELETE FROM daily_deliveries WHERE entry_date = ?', [date]);
-    const [boys] = await connection.query('SELECT id, name FROM employees WHERE role = "Delivery Boy"');
+    const [boys] = await connection.query("SELECT id, name FROM employees WHERE role = 'Delivery Boy'");
     const boyMap = {};
     boys.forEach(b => boyMap[b.name] = b.id);
     
