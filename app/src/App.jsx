@@ -50,7 +50,7 @@ export default function App() {
     return recoveries;
   };
 
-  const loadData = async () => {
+  const loadData = async (restoreDate = null) => {
     const data = await api.load();
     const pendingList = data.pending || [];
     
@@ -69,13 +69,16 @@ export default function App() {
     const loadedBoys = data.boys && data.boys.length > 0 ? data.boys : DEFAULT_BOYS;
     setDeliveryBoys(loadedBoys);
     
-    const todayEntry = entriesList.find((x) => x.date === todayStr());
-    if (todayEntry) setEntry(todayEntry);
+    // If a specific date was requested (e.g. after saving a backdated entry), restore that date
+    const targetDate = restoreDate || todayStr();
+    const targetEntry = entriesList.find((x) => x.date === targetDate);
+    if (targetEntry) setEntry(targetEntry);
     else {
       const sortedEntries = [...entriesList].sort((a,b) => b.date.localeCompare(a.date));
       const lastEntry = sortedEntries.length > 0 ? sortedEntries[0] : null;
       const blank = blankEntry(data.prices || [], loadedBoys, lastEntry);
-      blank.creditRecoveries = getRecoveriesForDate(todayStr(), pendingList);
+      blank.date = targetDate;
+      blank.creditRecoveries = getRecoveriesForDate(targetDate, pendingList);
       setEntry(blank);
     }
     setLoading(false);
@@ -93,6 +96,7 @@ export default function App() {
   /* ── save daily entry ── */
   const handleSave = async () => {
     try {
+      const savedDate = entry.date; // Remember the date being saved
       const finalEntry = { ...entry };
       finalEntry.products = finalEntry.products.map(p => {
         const g = (finalEntry.godownStock || []).find(x => x.productId === p.id) || {};
@@ -111,7 +115,10 @@ export default function App() {
         throw new Error(errData.error || `HTTP error ${response.status}`);
       }
       
-      await loadData();
+      // Reload data and restore the entry for the date that was just saved
+      // (without this, loadData defaults to today — wrong for admin backdated entries)
+      await loadData(savedDate);
+
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
 
