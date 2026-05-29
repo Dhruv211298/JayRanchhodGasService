@@ -212,9 +212,10 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
               </thead>
               <tbody>
                 {entry.products.map((p, i) => {
-                  const g = (entry.godownStock || []).find(x => x.productId === p.id) || {};
                   const a = (entry.arrivals || []).find(x => x.productId === p.id) || {};
-                  const autoOpening = num(g.filled) + (entry.hasArrival ? num(a.filledReceived) : 0);
+                  // Opening stock is pre-loaded from yesterday's closing godown stock.
+                  // The Closing Godown Stock section is for end-of-day physical count — it must NOT affect today's opening.
+                  const autoOpening = num(p.openingStock) + (entry.hasArrival ? num(a.filledReceived) : 0);
 
                   const cashTotal = (num(p.sell) * num(p.rate)) + (num(p.sbc) * num(p.sbcRate)) + (num(p.dbc) * num(p.dbcRate));
                   const onlineTotal = num(p.online) * num(p.rate);

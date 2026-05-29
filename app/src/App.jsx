@@ -99,13 +99,13 @@ export default function App() {
       const savedDate = entry.date; // Remember the date being saved
       const finalEntry = { ...entry };
       finalEntry.products = finalEntry.products.map(p => {
-        const g = (finalEntry.godownStock || []).find(x => x.productId === p.id) || {};
         const a = (finalEntry.arrivals || []).find(x => x.productId === p.id) || {};
-        const autoOpening = num(g.filled) + (finalEntry.hasArrival ? num(a.filledReceived) : 0);
+        // Use the pre-loaded openingStock (from yesterday's closing godown), not godownStock
+        const openingWithArrivals = num(p.openingStock) + (finalEntry.hasArrival ? num(a.filledReceived) : 0);
         return {
           ...p,
-          openingStock: autoOpening,
-          closingStock: autoOpening - num(p.sell) - num(p.online) - num(p.sbc) - num(p.dbc)
+          openingStock: openingWithArrivals,
+          closingStock: openingWithArrivals - num(p.sell) - num(p.online) - num(p.sbc) - num(p.dbc)
         };
       });
       
