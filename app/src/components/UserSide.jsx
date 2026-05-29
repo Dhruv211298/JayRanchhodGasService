@@ -675,7 +675,7 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
       {/* Godown Stock Section */}
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">
-          <span className="card-head-title">📦 Godown Stock Entry</span>
+          <span className="card-head-title">📦 Closing Godown Stock Entry</span>
         </div>
         <div className="card-body" style={{ padding: 0 }}>
           <div style={{ overflowX: "auto" }}>
@@ -1341,7 +1341,7 @@ export function GodownStock({ products, onSave, blankStock, api }) {
 
       <div className="card">
         <div className="card-head">
-          <span className="card-head-title">📦 Godown Stock Entry</span>
+          <span className="card-head-title">📦 Closing Godown Stock Entry</span>
           {loading && <span style={{ fontSize: 11, color: T.inkLight }}>Loading...</span>}
         </div>
         <div className="card-body" style={{ padding: 0 }}>

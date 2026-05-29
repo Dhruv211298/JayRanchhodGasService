@@ -121,17 +121,13 @@ export const blankAccessory = (pricesArr) => ACCESSORIES.map(a => ({ accessoryId
 
 export const blankGodownStock = (lastEntry = null) => PRODUCTS.map(p => {
   if (!lastEntry) return { productId: p.id, filled: "", empty: "" };
+  // The godownStock values saved in the DB are already the end-of-day (closing) stock
+  // the user physically entered. So today's opening = yesterday's closing directly.
   const g = (lastEntry.godownStock || []).find(x => x.productId === p.id) || {};
-  const a = (lastEntry.arrivals || []).find(x => x.productId === p.id) || {};
-  const prod = (lastEntry.products || []).find(x => x.id === p.id) || {};
-  
-  const prevFull = num(g.filled) + (lastEntry.hasArrival ? num(a.filledReceived) : 0) - num(prod.sell) - num(prod.online) - num(prod.sbc) - num(prod.dbc);
-  const prevEmpty = num(g.empty) - (lastEntry.hasArrival ? num(a.emptyReturned) : 0) + num(prod.sell) + num(prod.online);
-  
   return { 
     productId: p.id, 
-    filled: prevFull || "", 
-    empty: prevEmpty || "" 
+    filled: g.filled !== undefined && g.filled !== "" ? g.filled : "", 
+    empty: g.empty !== undefined && g.empty !== "" ? g.empty : "" 
   };
 });
 
