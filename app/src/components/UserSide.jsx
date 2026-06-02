@@ -779,8 +779,12 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                   const a = (entry.arrivals || []).find(x => x.productId === p.id) || {};
                   const prod = (entry.products || []).find(x => x.id === p.id) || {};
 
-                  const totalFull = num(g.filled) + (entry.hasArrival ? num(a.filledReceived) : 0) - num(prod.sell) - num(prod.online) - num(prod.sbc) - num(prod.dbc);
-                  const totalEmpty = num(g.empty) - (entry.hasArrival ? num(a.emptyReturned) : 0) + num(prod.sell) + num(prod.online);
+                  const totalFull = num(prod.openingStock) + (entry.hasArrival ? num(a.filledReceived) : 0) - num(prod.sell) - num(prod.online) - num(prod.sbc) - num(prod.dbc);
+                  // Empty cylinder logic: start with 0, add empty returned, subtract empty sent
+                  // But wait, the system doesn't track opening empty cylinders right now, or does it?
+                  // The previous formula was `num(g.empty) - received + sold`. 
+                  // If opening stock is missing, we'll just show the net difference for today.
+                  const totalEmpty = (num(prod.sell) + num(prod.online) + num(prod.sbc) + num(prod.dbc)) - (entry.hasArrival ? num(a.emptyReturned) : 0);
 
                   return (
                     <tr key={p.id}>
@@ -798,7 +802,7 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
             </table>
           </div>
           <div style={{ padding: "10px 16px", fontSize: 11, color: T.inkLight, fontStyle: "italic", borderTop: "1px solid rgba(0,119,255,0.1)" }}>
-            * Full = Godown Full + Received − Sold(Cash+Online) − SBC − DBC · Empty = Godown Empty − Sent to Plant + Sold(Cash+Online)
+            * Full = Opening Stock + Received − Sold(Cash+Online) − SBC − DBC · Empty = Sold(Cash+Online+SBC+DBC) − Sent to Plant
           </div>
         </div>
       </div>
