@@ -354,37 +354,42 @@ app.post('/api/entries', async (req, res) => {
 });
 
 /* ════════════════════════════════════════════════════════════════
-   2b. DELETE DAILY ENTRY (Admin only — removes full day's data)
+   2b. DELETE DAILY ENTRY (Admin only)
+   Removes ONLY the day's operational entry data.
+   Salary payments and credit ledger are kept as permanent records.
 ════════════════════════════════════════════════════════════════ */
 app.delete('/api/entries/:date', async (req, res) => {
   const date = req.params.date;
+
+  // Safety: validate date format (must be YYYY-MM-DD)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'Invalid date format. Expected YYYY-MM-DD.' });
+  }
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    // Delete all related tables for this date
+
+    // Only delete core daily entry tables for this specific date
     await connection.query('DELETE FROM daily_product_stock WHERE entry_date = ?', [date]);
     await connection.query('DELETE FROM daily_deliveries WHERE entry_date = ?', [date]);
     await connection.query('DELETE FROM daily_expenses WHERE entry_date = ?', [date]);
     await connection.query('DELETE FROM daily_cheque_online WHERE entry_date = ?', [date]);
     await connection.query('DELETE FROM daily_vehicle_expenses WHERE entry_date = ?', [date]);
-    await connection.query('DELETE FROM employee_payments WHERE entry_date = ?', [date]);
     await connection.query('DELETE FROM godown_stock WHERE entry_date = ?', [date]);
     await connection.query('DELETE FROM vehicle_arrivals WHERE entry_date = ?', [date]);
     await connection.query('DELETE FROM daily_accessory_sales WHERE entry_date = ?', [date]);
-    // Delete credit ledger entries with no payments for this date
-    const [creditRows] = await connection.query('SELECT id FROM credit_ledger WHERE entry_date = ?', [date]);
-    for (const row of creditRows) {
-      const [payments] = await connection.query('SELECT COUNT(*) as cnt FROM credit_payments WHERE ledger_id = ?', [row.id]);
-      if (payments[0].cnt === 0) {
-        await connection.query('DELETE FROM credit_ledger WHERE id = ?', [row.id]);
-      }
-    }
+    // Delete the main daily entry row last
     await connection.query('DELETE FROM daily_entries WHERE entry_date = ?', [date]);
+
+    // NOTE: employee_payments (salary/advance) and credit_ledger are intentionally
+    // NOT deleted — they are permanent financial records.
+
     await connection.commit();
     res.json({ success: true });
   } catch (error) {
     await connection.rollback();
-    console.error("Delete Entry Error:", error);
+    console.error('Delete Entry Error:', error);
     res.status(500).json({ error: error.message });
   } finally {
     connection.release();
