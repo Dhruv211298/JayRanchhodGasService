@@ -217,9 +217,10 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                   // Arrivals (filledReceived) must NOT be added here — they are already reflected in the In-Out Master section.
                   const autoOpening = num(p.openingStock);
 
+                  const received = entry.hasArrival ? num(a.filledReceived) : 0;
                   const cashTotal = (num(p.sell) * num(p.rate)) + (num(p.sbc) * num(p.sbcRate)) + (num(p.dbc) * num(p.dbcRate));
                   const onlineTotal = num(p.online) * num(p.rate);
-                  const closing = autoOpening - num(p.sell) - num(p.online) - num(p.sbc) - num(p.dbc);
+                  const closing = autoOpening + received - num(p.sell) - num(p.online) - num(p.sbc) - num(p.dbc);
                   return (
                     <tr key={p.id}>
                       <td style={{ fontWeight: 600, color: T.accent, whiteSpace: "nowrap" }}>{PRODUCTS[i].label}</td>

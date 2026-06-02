@@ -99,13 +99,13 @@ export default function App() {
       const savedDate = entry.date; // Remember the date being saved
       const finalEntry = { ...entry };
       finalEntry.products = finalEntry.products.map(p => {
-        // openingStock is already the correct value (from previous In-Out Master)
-        // Do NOT add filledReceived here — it's only factored into In-Out Master display.
         const openingStock = num(p.openingStock);
+        const a = (finalEntry.arrivals || []).find(x => x.productId === p.id) || {};
+        const received = finalEntry.hasArrival ? num(a.filledReceived) : 0;
         return {
           ...p,
           openingStock,
-          closingStock: openingStock - num(p.sell) - num(p.online) - num(p.sbc) - num(p.dbc)
+          closingStock: openingStock + received - num(p.sell) - num(p.online) - num(p.sbc) - num(p.dbc)
         };
       });
       
