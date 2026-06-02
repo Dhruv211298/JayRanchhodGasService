@@ -102,18 +102,11 @@ export const calcEntry = (e) => {
 
 /* ── blank templates ── */
 export const blankProduct = (pricesArr, lastEntry = null) => PRODUCTS.map((p) => {
-  // Opening stock = previous day's In-Out Stock Master "Full Cylinder Stock" value:
-  //   godown.filled + (arrivals filledReceived if hasArrival) - sell - online - sbc - dbc
+  // Opening stock = previous day's Products Stock & Sales (In-Out Stock Master) Closing Stock
   let prevInOutFull = "";
   if (lastEntry) {
-    const g = (lastEntry.godownStock || []).find(x => x.productId === p.id) || {};
-    const a = (lastEntry.arrivals || []).find(x => x.productId === p.id) || {};
-    const prod = (lastEntry.products || []).find(x => x.id === p.id) || {};
-    const filled = parseFloat(g.filled) || 0;
-    const received = lastEntry.hasArrival ? (parseFloat(a.filledReceived) || 0) : 0;
-    const sold = (parseFloat(prod.sell) || 0) + (parseFloat(prod.online) || 0)
-                 + (parseFloat(prod.sbc) || 0) + (parseFloat(prod.dbc) || 0);
-    prevInOutFull = filled + received - sold;
+    const prevP = (lastEntry.products || []).find(x => x.id === p.id);
+    if (prevP && prevP.closingStock !== "") prevInOutFull = prevP.closingStock;
   }
   return { 
     id: p.id, 
