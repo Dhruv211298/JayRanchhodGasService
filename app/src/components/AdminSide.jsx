@@ -3,7 +3,7 @@ import { api } from "../api";
 import { T } from "../styles";
 import { 
   PRODUCTS, ACCESSORIES, todayStr, fmtDate, fmtMonth, inr, num, uid, 
-  getCurrentRate, getCommRate, calcEntry 
+  getCurrentRate, getCommRate, calcEntry, getSalaryMonth
 } from "../constants";
 
 export function AdminDashboard({ entries, pending, prices, commissions }) {
@@ -148,7 +148,7 @@ export function AdminPriceHistory({ prices, setPrices }) {
           <div className="card-head"><span className="card-head-title">➕ Add New Rate</span></div>
           <div className="card-body">
             <div className="field"><label>Product</label><select className="inp" value={selProd} onChange={e=>setSelProd(e.target.value)}>{[...PRODUCTS, ...ACCESSORIES].map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
-            <div className="field"><label>Effective Date</label><input className="inp" type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} /></div>
+            <div className="field"><label>Effective Date</label><input className="inp" type="date" max={todayStr()} value={form.date} onChange={e=>setForm({...form,date:e.target.value})} /></div>
             <div className="field"><label>Refill Rate (₹)</label><input className="inp" type="number" placeholder="e.g. 906.50" value={form.rate} onChange={e=>setForm({...form,rate:e.target.value})} /></div>
             <div className="field"><label>SBC Rate (₹)</label><input className="inp" type="number" placeholder="New connection single" value={form.sbcRate} onChange={e=>setForm({...form,sbcRate:e.target.value})} /></div>
             <div className="field"><label>DBC Rate (₹)</label><input className="inp" type="number" placeholder="New connection double" value={form.dbcRate} onChange={e=>setForm({...form,dbcRate:e.target.value})} /></div>
@@ -224,7 +224,7 @@ export function AdminCommission({ commissions, setCommissions }) {
           <div className="card-head"><span className="card-head-title">➕ Set Commission</span></div>
           <div className="card-body">
             <div className="field"><label>Product</label><select className="inp" value={selProd} onChange={e=>setSelProd(e.target.value)}>{PRODUCTS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
-            <div className="field"><label>Effective Date</label><input className="inp" type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} /></div>
+            <div className="field"><label>Effective Date</label><input className="inp" type="date" max={todayStr()} value={form.date} onChange={e=>setForm({...form,date:e.target.value})} /></div>
             <div className="field"><label>Commission (₹/cyl)</label><input className="inp" type="number" placeholder="e.g. 25" value={form.perCyl} onChange={e=>setForm({...form,perCyl:e.target.value})} /></div>
             <div className="field"><label>Note</label><input className="inp" type="text" placeholder="Reason…" value={form.note} onChange={e=>setForm({...form,note:e.target.value})} /></div>
             <button className="btn-primary" style={{width:"100%", marginTop: 8}} onClick={add}>Save Commission</button>
@@ -388,12 +388,13 @@ export function AdminSalaryReport({ entries, employees }) {
   const [filter, setFilter] = useState("");
   const allPayments = entries.flatMap(e => (e.salaryPayments || []).map(p => ({ ...p, date: e.date })));
   
-  // Calculate summaries for ALL employees for the current month
-  const now = new Date();
-  const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
+  // Salary month: if today is 1st-10th, report covers previous month; else current month.
+  const currentMonth = getSalaryMonth();
   
   const summaries = (employees || []).map(emp => {
-    const empPayments = allPayments.filter(p => String(p.employeeId) === String(emp.id) && p.date.startsWith(currentMonth));
+    // Filter by forMonth if present (new records), fall back to entry date for old records
+    const empPayments = allPayments.filter(p => String(p.employeeId) === String(emp.id) &&
+      (p.forMonth ? p.forMonth === currentMonth : p.date.startsWith(currentMonth)));
     const advance = empPayments.filter(p => p.type === "Advance").reduce((s, p) => s + num(p.amt), 0);
     const salary = empPayments.filter(p => p.type === "Salary").reduce((s, p) => s + num(p.amt), 0);
     const totalPaid = advance + salary;
@@ -421,7 +422,7 @@ export function AdminSalaryReport({ entries, employees }) {
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>
-        <div className="card-head"><span className="card-head-title">📊 Monthly Balance Sheet ({fmtMonth(todayStr())})</span></div>
+        <div className="card-head"><span className="card-head-title">📊 Monthly Balance Sheet ({fmtMonth(currentMonth + "-01")})</span></div>
         <div style={{ overflowX: "auto" }}>
           <table className="tbl">
             <thead>

@@ -34,6 +34,16 @@ pool.on('connection', (connection) => {
 // Helper: safe number
 const num = (v) => parseFloat(v) || 0;
 
+// Auto-migration: add for_month column to employee_payments if missing
+(async () => {
+  try {
+    await pool.query(`ALTER TABLE employee_payments ADD COLUMN IF NOT EXISTS for_month VARCHAR(7) NULL COMMENT 'YYYY-MM salary month this payment applies to'`);
+  } catch (e) {
+    // Column may already exist or DB may not support IF NOT EXISTS — safe to ignore
+    if (!e.message.includes('Duplicate column')) console.warn('for_month migration note:', e.message);
+  }
+})();
+
 /* ════════════════════════════════════════════════════════════════
    1. MASTER LOAD ENDPOINT (Replaces initial dbGet Promise.all)
 ════════════════════════════════════════════════════════════════ */
@@ -84,7 +94,7 @@ app.get('/api/load', async (req, res) => {
     const [chequeRows] = await pool.query("SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, description as `desc`, amount as amt FROM daily_cheque_online");
     const [creditSalesRows] = await pool.query(`SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, customer_name as customerName, original_amount as amt FROM credit_ledger`);
     const [vehExpRows] = await pool.query("SELECT dve.id, DATE_FORMAT(dve.entry_date, '%Y-%m-%d') as entry_date, dve.vehicle_id as vehicleId, COALESCE(v.vehicle_no, '') as vehicleNo, dve.expense_type as expType, dve.description as `desc`, dve.amount as amt FROM daily_vehicle_expenses dve LEFT JOIN vehicles v ON dve.vehicle_id = v.id");
-    const [salPayRows] = await pool.query(`SELECT sp.id, DATE_FORMAT(sp.entry_date, '%Y-%m-%d') as entry_date, sp.employee_id as employeeId, e.name as employeeName, sp.amount as amt, sp.type, sp.notes FROM employee_payments sp JOIN employees e ON sp.employee_id = e.id`);
+    const [salPayRows] = await pool.query(`SELECT sp.id, DATE_FORMAT(sp.entry_date, '%Y-%m-%d') as entry_date, sp.employee_id as employeeId, e.name as employeeName, sp.amount as amt, sp.type, sp.notes, sp.for_month as forMonth FROM employee_payments sp JOIN employees e ON sp.employee_id = e.id`);
     const [godownRows] = await pool.query("SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, product_id as productId, filled_qty as `filled`, empty_qty as `empty` FROM godown_stock");
     const [arrivalRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, product_id as productId, filled_received as filledReceived, empty_returned as emptyReturned FROM vehicle_arrivals`);
     const [accRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, accessory_id as accessoryId, qty, rate FROM daily_accessory_sales`);
@@ -117,7 +127,7 @@ app.get('/api/load', async (req, res) => {
       const chequeOnline = chequeRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, desc: x.desc, amt: x.amt || "" }));
       const creditSales = creditSalesRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, customerName: x.customerName, amt: x.amt || "" }));
       const vehicleExpenses = vehExpRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, vehicleId: x.vehicleId || '', vehicleNo: x.vehicleNo || '', expType: x.expType || 'Fuel', desc: x.desc || '', amt: x.amt || '' }));
-      const salaryPayments = salPayRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, employeeId: x.employeeId, employeeName: x.employeeName, amt: x.amt || "", type: x.type, notes: x.notes || "" }));
+      const salaryPayments = salPayRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, employeeId: x.employeeId, employeeName: x.employeeName, amt: x.amt || "", type: x.type, notes: x.notes || "", forMonth: x.forMonth || null }));
       const creditRecoveries = paymentRows.filter(p => p.date === date).map(p => ({
         ledgerId: p.ledger_id,
         customerName: p.customerName || "UNKNOWN",
@@ -287,9 +297,9 @@ app.post('/api/entries', async (req, res) => {
     if (entry.salaryPayments) {
       const salPayVals = entry.salaryPayments
         .filter(x => x.employeeId && num(x.amt) > 0)
-        .map(x => [x.id, date, x.employeeId, num(x.amt), x.type || 'Salary', x.notes || '']);
+        .map(x => [x.id, date, x.employeeId, num(x.amt), x.type || 'Salary', x.notes || '', x.forMonth || null]);
       if (salPayVals.length > 0) {
-        await connection.query('INSERT INTO employee_payments (id, entry_date, employee_id, amount, type, notes) VALUES ?', [salPayVals]);
+        await connection.query('INSERT INTO employee_payments (id, entry_date, employee_id, amount, type, notes, for_month) VALUES ?', [salPayVals]);
       }
     }
 
@@ -337,6 +347,44 @@ app.post('/api/entries', async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error("Save Entry Error:", error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+/* ════════════════════════════════════════════════════════════════
+   2b. DELETE DAILY ENTRY (Admin only — removes full day's data)
+════════════════════════════════════════════════════════════════ */
+app.delete('/api/entries/:date', async (req, res) => {
+  const date = req.params.date;
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    // Delete all related tables for this date
+    await connection.query('DELETE FROM daily_product_stock WHERE entry_date = ?', [date]);
+    await connection.query('DELETE FROM daily_deliveries WHERE entry_date = ?', [date]);
+    await connection.query('DELETE FROM daily_expenses WHERE entry_date = ?', [date]);
+    await connection.query('DELETE FROM daily_cheque_online WHERE entry_date = ?', [date]);
+    await connection.query('DELETE FROM daily_vehicle_expenses WHERE entry_date = ?', [date]);
+    await connection.query('DELETE FROM employee_payments WHERE entry_date = ?', [date]);
+    await connection.query('DELETE FROM godown_stock WHERE entry_date = ?', [date]);
+    await connection.query('DELETE FROM vehicle_arrivals WHERE entry_date = ?', [date]);
+    await connection.query('DELETE FROM daily_accessory_sales WHERE entry_date = ?', [date]);
+    // Delete credit ledger entries with no payments for this date
+    const [creditRows] = await connection.query('SELECT id FROM credit_ledger WHERE entry_date = ?', [date]);
+    for (const row of creditRows) {
+      const [payments] = await connection.query('SELECT COUNT(*) as cnt FROM credit_payments WHERE ledger_id = ?', [row.id]);
+      if (payments[0].cnt === 0) {
+        await connection.query('DELETE FROM credit_ledger WHERE id = ?', [row.id]);
+      }
+    }
+    await connection.query('DELETE FROM daily_entries WHERE entry_date = ?', [date]);
+    await connection.commit();
+    res.json({ success: true });
+  } catch (error) {
+    await connection.rollback();
+    console.error("Delete Entry Error:", error);
     res.status(500).json({ error: error.message });
   } finally {
     connection.release();

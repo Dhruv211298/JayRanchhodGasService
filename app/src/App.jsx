@@ -99,13 +99,13 @@ export default function App() {
       const savedDate = entry.date; // Remember the date being saved
       const finalEntry = { ...entry };
       finalEntry.products = finalEntry.products.map(p => {
-        const a = (finalEntry.arrivals || []).find(x => x.productId === p.id) || {};
-        // Use the pre-loaded openingStock (from yesterday's closing godown), not godownStock
-        const openingWithArrivals = num(p.openingStock) + (finalEntry.hasArrival ? num(a.filledReceived) : 0);
+        // openingStock is already the correct value (from previous In-Out Master)
+        // Do NOT add filledReceived here — it's only factored into In-Out Master display.
+        const openingStock = num(p.openingStock);
         return {
           ...p,
-          openingStock: openingWithArrivals,
-          closingStock: openingWithArrivals - num(p.sell) - num(p.online) - num(p.sbc) - num(p.dbc)
+          openingStock,
+          closingStock: openingStock - num(p.sell) - num(p.online) - num(p.sbc) - num(p.dbc)
         };
       });
       
@@ -145,6 +145,25 @@ export default function App() {
   const recordPayment = async (pendingId, payAmt, payDate, note) => {
     await api.savePayment(pendingId, payAmt, payDate, note);
     await loadData();
+  };
+
+  /* ── delete a daily entry (admin only) ── */
+  const handleDeleteEntry = async (date) => {
+    try {
+      const res = await api.deleteEntry(date);
+      if (!res.ok) throw new Error(`Delete failed`);
+      // If we're viewing the deleted entry, reset to today
+      if (entry.date === date) {
+        const sortedEntries = [...entries].filter(e => e.date !== date).sort((a, b) => b.date.localeCompare(a.date));
+        const lastEntry = sortedEntries.length > 0 ? sortedEntries[0] : null;
+        const blank = blankEntry(prices, deliveryBoys, lastEntry);
+        setEntry(blank);
+      }
+      setEntries(prev => prev.filter(e => e.date !== date));
+      Swal.fire({ title: "Deleted!", text: `Entry for ${date} removed.`, icon: "success", timer: 1800, timerProgressBar: true, confirmButtonColor: "#0077ff" });
+    } catch (err) {
+      Swal.fire({ title: "Delete Failed", text: err.message, icon: "error", confirmButtonColor: "#ef4444" });
+    }
   };
 
   const handleLogout = () => {
@@ -238,7 +257,7 @@ export default function App() {
 
         {/* Admin Tabs */}
         {tab === "admin-entry" && <DailyEntry entry={entry} setEntry={setEntry} calcs={calcs} onSave={handleSave} saved={saved} entries={entries} prices={prices} deliveryBoys={deliveryBoys} vehicles={vehicles} employees={employees} pending={pending} isAdmin={true} />}
-        {tab === "admin-history" && <History entries={entries} onEdit={(e) => { setEntry(e); setTab("admin-entry"); }} isAdmin={true} />}
+        {tab === "admin-history" && <History entries={entries} onEdit={(e) => { setEntry(e); setTab("admin-entry"); }} isAdmin={true} onDelete={handleDeleteEntry} />}
         {tab === "admin-dashboard" && <AdminDashboard entries={entries} pending={pending} prices={prices} commissions={commissions} />}
         {tab === "admin-prices" && <AdminPriceHistory prices={prices} setPrices={setPrices} />}
         {tab === "admin-comm" && <AdminCommission commissions={commissions} setCommissions={setCommissions} />}

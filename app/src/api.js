@@ -41,4 +41,5 @@ export const api = {
     headers: { "Content-Type": "application/json" }, 
     body: JSON.stringify({ date, items }) 
   }),
+  deleteEntry: async (date) => fetch(`${API_URL}/entries/${date}`, { method: "DELETE" }),
 };

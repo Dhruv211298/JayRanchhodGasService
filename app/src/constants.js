@@ -11,8 +11,19 @@ export const DEFAULT_BOYS = ["OFFICE", "CHIRAG / JAYESH", "ARPIT / MAYUR", "CHOT
 export const ADMIN_PW = "admin123";
 
 export const todayStr = () => new Date().toISOString().slice(0, 10);
+
+// Returns the salary month: if today is 1st–10th, use previous month; else current month.
+export const getSalaryMonth = () => {
+  const now = new Date();
+  if (now.getDate() <= 10) {
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return prev.toISOString().slice(0, 7);
+  }
+  return now.toISOString().slice(0, 7);
+};
 export const fmtDate = (d) => new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-export const fmtMonth = (d) => new Date(d + "T00:00:00").toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+const _MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+export const fmtMonth = (d) => { const dt = new Date(d + "T00:00:00"); return `${_MONTHS[dt.getMonth()]} ${dt.getFullYear()}`; };
 export const num = (v) => parseFloat(v) || 0;
 export const inr = (v) => "₹" + num(v).toLocaleString("en-IN", { minimumFractionDigits: 0 });
 export const uid = () => Math.random().toString(36).slice(2, 9);
@@ -91,14 +102,22 @@ export const calcEntry = (e) => {
 
 /* ── blank templates ── */
 export const blankProduct = (pricesArr, lastEntry = null) => PRODUCTS.map((p) => {
-  let prevClosing = "";
-  if (lastEntry && lastEntry.products) {
-    const prevP = lastEntry.products.find(x => x.id === p.id);
-    if (prevP && prevP.closingStock !== "") prevClosing = prevP.closingStock;
+  // Opening stock = previous day's In-Out Stock Master "Full Cylinder Stock" value:
+  //   godown.filled + (arrivals filledReceived if hasArrival) - sell - online - sbc - dbc
+  let prevInOutFull = "";
+  if (lastEntry) {
+    const g = (lastEntry.godownStock || []).find(x => x.productId === p.id) || {};
+    const a = (lastEntry.arrivals || []).find(x => x.productId === p.id) || {};
+    const prod = (lastEntry.products || []).find(x => x.id === p.id) || {};
+    const filled = parseFloat(g.filled) || 0;
+    const received = lastEntry.hasArrival ? (parseFloat(a.filledReceived) || 0) : 0;
+    const sold = (parseFloat(prod.sell) || 0) + (parseFloat(prod.online) || 0)
+                 + (parseFloat(prod.sbc) || 0) + (parseFloat(prod.dbc) || 0);
+    prevInOutFull = filled + received - sold;
   }
   return { 
     id: p.id, 
-    openingStock: prevClosing, 
+    openingStock: prevInOutFull, 
     rate: getCurrentRate(p.id, pricesArr), 
     sbcRate: getSbcRate(p.id, pricesArr),
     dbcRate: getDbcRate(p.id, pricesArr),
@@ -115,7 +134,7 @@ export const blankExpense = () => ({ id: uid(), desc: "", amt: "" });
 export const blankCheque = () => ({ id: uid(), desc: "", amt: "" });
 export const blankCredit = () => ({ id: uid(), customerName: "", amt: "" });
 export const blankVehicleExp = () => ({ id: uid(), vehicleId: "", vehicleNo: "", expType: "Fuel", desc: "", amt: "" });
-export const blankSalaryPayment = () => ({ id: uid(), employeeId: "", employeeName: "", amt: "", type: "Salary", notes: "" });
+export const blankSalaryPayment = () => ({ id: uid(), employeeId: "", employeeName: "", amt: "", type: "Salary", notes: "", forMonth: new Date().toISOString().slice(0, 7) });
 export const blankArrival = () => PRODUCTS.map(p => ({ productId: p.id, filledReceived: "", emptyReturned: "" }));
 export const blankAccessory = (pricesArr) => ACCESSORIES.map(a => ({ accessoryId: a.id, sold: false, qty: "", rate: getCurrentRate(a.id, pricesArr) }));
 

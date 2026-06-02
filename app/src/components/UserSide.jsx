@@ -2,7 +2,7 @@ import { useState } from "react";
 import Swal from "sweetalert2";
 import { T } from "../styles";
 import {
-  PRODUCTS, ACCESSORIES, todayStr, fmtDate, fmtMonth, inr, num,
+  PRODUCTS, ACCESSORIES, todayStr, fmtDate, fmtMonth, inr, num, getSalaryMonth,
   blankExpense, blankCheque, blankCredit, blankVehicleExp, blankSalaryPayment,
   calcEntry
 } from "../constants";
@@ -83,7 +83,7 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
         <div className="card">
           <div className="card-head"><span className="card-head-title">📅 Date</span></div>
           <div className="card-body">
-            <input className="inp" type="date" value={entry.date} onChange={(e) => set("date", e.target.value)} />
+            <input className="inp" type="date" value={entry.date} max={todayStr()} onChange={(e) => set("date", e.target.value)} />
           </div>
         </div>
         <div className="card">
@@ -213,9 +213,9 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
               <tbody>
                 {entry.products.map((p, i) => {
                   const a = (entry.arrivals || []).find(x => x.productId === p.id) || {};
-                  // Opening stock is pre-loaded from yesterday's closing godown stock.
-                  // The Closing Godown Stock section is for end-of-day physical count — it must NOT affect today's opening.
-                  const autoOpening = num(p.openingStock) + (entry.hasArrival ? num(a.filledReceived) : 0);
+                  // Opening stock is the previous day's In-Out Stock Master full cylinder value.
+                  // Arrivals (filledReceived) must NOT be added here — they are already reflected in the In-Out Master section.
+                  const autoOpening = num(p.openingStock);
 
                   const cashTotal = (num(p.sell) * num(p.rate)) + (num(p.sbc) * num(p.sbcRate)) + (num(p.dbc) * num(p.dbcRate));
                   const onlineTotal = num(p.online) * num(p.rate);
@@ -617,8 +617,9 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
             <table className="tbl" style={{ border: `1px solid ${T.border}`, borderRadius: 4, overflow: "hidden" }}>
               <thead>
                 <tr>
-                  <th style={{ width: "35%" }}>Employee</th>
-                  <th style={{ width: "20%" }}>Type</th>
+                  <th style={{ width: "30%" }}>Employee</th>
+                  <th style={{ width: "18%" }}>Type</th>
+                  <th style={{ width: "20%" }}>For Month</th>
                   <th style={{ textAlign: "right" }}>Amount</th>
                   <th style={{ width: 36 }}></th>
                 </tr>
@@ -654,6 +655,29 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                       >
                         <option value="Salary">Salary</option>
                         <option value="Advance">Advance</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        className="inp-inline left"
+                        value={x.forMonth || new Date().toISOString().slice(0, 7)}
+                        onChange={(e) => listSet("salaryPayments", x.id, "forMonth", e.target.value)}
+                        style={{ fontSize: 12 }}
+                        disabled={!canEdit}
+                      >
+                        {(() => {
+                          const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                          // Show 12 months: current + 11 past (to cover full previous year)
+                          const opts = [];
+                          const now = new Date();
+                          for (let i = 0; i < 12; i++) {
+                            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                            const val = d.toISOString().slice(0, 7); // "YYYY-MM"
+                            const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`; // "June 2026"
+                            opts.push(<option key={val} value={val}>{label}</option>);
+                          }
+                          return opts;
+                        })()}
                       </select>
                     </td>
                     <td><input className="inp-inline" type="number" placeholder="0" value={x.amt} onChange={(e) => listSet("salaryPayments", x.id, "amt", e.target.value)} readOnly={!canEdit} /></td>
@@ -824,8 +848,25 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
   );
 }
 
-export function History({ entries, onEdit, isAdmin }) {
+export function History({ entries, onEdit, isAdmin, onDelete }) {
   const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+
+  const handleDelete = async (e, date) => {
+    e.stopPropagation(); // prevent row click triggering edit
+    const result = await Swal.fire({
+      title: "Delete Entry?",
+      html: `This will permanently delete the entry for <strong>${fmtDate(date)}</strong> and all associated data.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Yes, Delete",
+      cancelButtonText: "Cancel"
+    });
+    if (result.isConfirmed && onDelete) {
+      await onDelete(date);
+    }
+  };
   return (
     <div className="fade-in">
       <div style={{ fontSize: 12, color: T.inkLight, marginBottom: 12 }}>{entries.length} entries · tap to view/edit</div>
@@ -908,9 +949,19 @@ export function History({ entries, onEdit, isAdmin }) {
                       })}
                     </td>
                     <td style={{ border: `1px solid ${T.border}`, textAlign: "center", whiteSpace: "nowrap", padding: "0 8px" }}>
-                      <span style={{ display: "inline-flex", gap: 4, alignItems: "center", background: (isToday || isAdmin) ? T.ink : T.blueBg, color: (isToday || isAdmin) ? "#fff" : T.blue, padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
-                        {(isToday || isAdmin) ? "✏️ Edit" : "👁️ View"}
-                      </span>
+                      <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                        <span style={{ display: "inline-flex", gap: 4, alignItems: "center", background: (isToday || isAdmin) ? T.ink : T.blueBg, color: (isToday || isAdmin) ? "#fff" : T.blue, padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                          {(isToday || isAdmin) ? "✏️ Edit" : "👁️ View"}
+                        </span>
+                        {isAdmin && (
+                          <span
+                            onClick={(ev) => handleDelete(ev, e.date)}
+                            style={{ display: "inline-flex", alignItems: "center", background: "#ef4444", color: "#fff", padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                          >
+                            🗑️ Del
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1146,12 +1197,13 @@ export function SalaryReport({ entries, employees }) {
   const [filter, setFilter] = useState(""); // Employee filter
   const allPayments = entries.flatMap(e => (e.salaryPayments || []).map(p => ({ ...p, date: e.date })));
 
-  // Calculate summaries for ALL employees for the current month
-  const now = new Date();
-  const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
+  // Salary month: if today is 1st-10th, report covers previous month; else current month.
+  const currentMonth = getSalaryMonth();
 
   const summaries = (employees || []).map(emp => {
-    const empPayments = allPayments.filter(p => String(p.employeeId) === String(emp.id) && p.date.startsWith(currentMonth));
+    // Filter by forMonth if present (new records), fall back to entry date for old records
+    const empPayments = allPayments.filter(p => String(p.employeeId) === String(emp.id) &&
+      (p.forMonth ? p.forMonth === currentMonth : p.date.startsWith(currentMonth)));
     const advance = empPayments.filter(p => p.type === "Advance").reduce((s, p) => s + num(p.amt), 0);
     const salary = empPayments.filter(p => p.type === "Salary").reduce((s, p) => s + num(p.amt), 0);
     const totalPaid = advance + salary;
@@ -1179,7 +1231,7 @@ export function SalaryReport({ entries, employees }) {
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>
-        <div className="card-head"><span className="card-head-title">📊 Monthly Balance Sheet ({fmtMonth(todayStr())})</span></div>
+        <div className="card-head"><span className="card-head-title">📊 Monthly Balance Sheet ({fmtMonth(currentMonth + "-01")})</span></div>
         <div style={{ overflowX: "auto" }}>
           <table className="tbl">
             <thead>
@@ -1230,18 +1282,20 @@ export function SalaryReport({ entries, employees }) {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th>Date Paid</th>
                   <th style={{ textAlign: "center" }}>Type</th>
+                  <th>For Month</th>
                   <th style={{ textAlign: "right" }}>Amount</th>
                   <th>Notes</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", padding: 32, color: T.inkLight }}>No payment records found.</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", padding: 32, color: T.inkLight }}>No payment records found.</td></tr>}
                 {filtered.map((p, idx) => (
                   <tr key={idx}>
                     <td style={{ whiteSpace: "nowrap" }}>{fmtDate(p.date)}</td>
                     <td style={{ textAlign: "center" }}><span className={`badge ${p.type === "Salary" ? "badge-success" : "badge-warn"}`}>{p.type}</span></td>
+                    <td style={{ fontSize: 12, color: T.inkMid }}>{p.forMonth ? fmtMonth(p.forMonth + "-01") : fmtMonth(p.date)}</td>
                     <td style={{ color: T.danger, fontWeight: 700, textAlign: "right" }}>{inr(p.amt)}</td>
                     <td style={{ fontSize: 12, color: T.inkMid }}>{p.notes}</td>
                   </tr>
@@ -1336,7 +1390,7 @@ export function GodownStock({ products, onSave, blankStock, api }) {
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head"><span className="card-head-title">📅 Select Date</span></div>
         <div className="card-body">
-          <input className="inp" type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} />
+          <input className="inp" type="date" value={date} max={todayStr()} onChange={(e) => handleDateChange(e.target.value)} />
         </div>
       </div>
 
