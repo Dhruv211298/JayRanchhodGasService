@@ -347,7 +347,6 @@ export function AdminDayDetail({ entry, commissions }) {
             <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #eee"}}><span style={{fontSize:12,color:T.inkMid}}>Vehicle Expenses</span><span style={{fontWeight:600,color:T.danger}}>-{inr(calcs.totalVehicleExp)}</span></div>
             <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #eee"}}><span style={{fontSize:12,color:T.inkMid}}>Salary / Advance</span><span style={{fontWeight:600,color:T.danger}}>-{inr(calcs.totalSalaryPayments)}</span></div>
             <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #eee"}}><span style={{fontSize:12,color:T.inkMid}}>Cheque/Online</span><span style={{fontWeight:600,color:T.danger}}>-{inr(calcs.totalCheque)}</span></div>
-            <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #eee"}}><span style={{fontSize:12,color:T.inkMid}}>Credit Sales</span><span style={{fontWeight:600,color:T.danger}}>-{inr(calcs.totalCredit)}</span></div>
             <div style={{display:"flex",justifyContent:"space-between",padding:"12px 0 4px",marginTop:8,borderTop:"2px solid #ccc"}}><span style={{fontSize:12,fontWeight:700,color:T.inkMid}}>CASH ON HAND</span><span style={{fontFamily:"'Fraunces',serif",fontSize:20,fontWeight:700,color:calcs.cashOnHand<0?T.danger:T.success}}>{inr(calcs.cashOnHand)}</span></div>
           </div>
         </div>

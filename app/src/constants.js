@@ -95,8 +95,8 @@ export const calcEntry = (e) => {
   const totalSales = totalCashSales + totalOnlineSales;
   const originalSales = originalCashSales + totalOnlineSales;
 
-  // Cash on Hand: Opening + Total Sales (Cash+Online) + Accessories + Credit Returns - OnlineAutoDeduction - Expenses - Credit - Vehicle - Salary - BOB Bank
-  const cashOnHand = num(e.openingCash) + totalSales + totalAccessorySales + totalCreditRecoveries - totalOnlineSales - totalExpenses - totalCredit - totalVehicleExp - totalSalaryPayments - num(e.bob);
+  // Cash on Hand: Opening + Total Sales (Cash+Online) + Accessories + Credit Returns - OnlineAutoDeduction - Expenses - Vehicle - Salary - BOB Bank
+  const cashOnHand = num(e.openingCash) + totalSales + totalAccessorySales + totalCreditRecoveries - totalOnlineSales - totalExpenses - totalVehicleExp - totalSalaryPayments - num(e.bob);
   return { totalSales, totalCashSales, totalOnlineSales, totalAccessorySales, totalDelivery, totalExpenses, totalCheque, totalCredit, totalVehicleExp, totalSalaryPayments, totalCreditRecoveries, cashOnHand, originalCashSales, originalSales, sameDayPayments, originalCredit };
 };
 

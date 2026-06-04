@@ -891,7 +891,7 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px 8px" }}>
           <div>
             <div className="coh-label">Cash on Hand</div>
-            <div className="coh-formula">Opening + Total Sales (Cash+Online) + Credit Received + Cheque/Online − Online/Cheque (→Bank) − Expenses − Vehicle − Salary − Credit − BOB Bank</div>
+            <div className="coh-formula">Opening + Total Sales (Cash+Online) + Credit Received + Cheque/Online − Online/Cheque (→Bank) − Expenses − Vehicle − Salary − BOB Bank</div>
           </div>
           <div className={`coh-amount${calcs.cashOnHand < 0 ? " negative" : ""}`}>{inr(calcs.cashOnHand)}</div>
         </div>
@@ -908,7 +908,6 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
             { label: "Expenses (−)", val: calcs.totalExpenses, color: T.danger },
             { label: "Vehicle Exp (−)", val: calcs.totalVehicleExp, color: T.danger },
             { label: "Salary/Adv (−)", val: calcs.totalSalaryPayments, color: T.danger },
-            { label: "Credit Sales (−)", val: calcs.totalCredit, color: T.danger, sub: calcs.sameDayPayments > 0 ? `${inr(calcs.originalCredit)} − ${inr(calcs.sameDayPayments)}` : null },
             { label: "BOB Bank Deposit (−)", val: num(entry.bob), color: T.danger },
           ].map(({ label, val, color, note, sub }) => (
             <div key={label} style={{ background: "white", padding: "6px 12px", display: "flex", flexDirection: "column" }}>
