@@ -1,10 +1,10 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import Swal from "sweetalert2";
 import { T } from "../styles";
 import {
   PRODUCTS, ACCESSORIES, todayStr, fmtDate, fmtMonth, inr, num, getSalaryMonth,
   blankExpense, blankCheque, blankCredit, blankVehicleExp, blankSalaryPayment,
-  calcEntry
+  calcEntry, getCurrentRate
 } from "../constants";
 
 const VEH_EXP_TYPES = ["Fuel", "Repair", "Maintenance", "Toll / Tax", "Washing", "Other"];
@@ -220,7 +220,9 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                   const received = entry.hasArrival ? num(a.filledReceived) : 0;
                   const cashTotal = (num(p.sell) * num(p.rate)) + (num(p.sbc) * num(p.sbcRate)) + (num(p.dbc) * num(p.dbcRate));
                   const onlineTotal = num(p.online) * num(p.rate);
-                  const closing = autoOpening + received - num(p.sell) - num(p.online) - num(p.sbc) - num(p.dbc);
+                  // Also deduct credit sale filled cylinders from closing stock
+                  const creditFilledForProduct = (entry.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.filledQty), 0);
+                  const closing = autoOpening + received - num(p.sell) - num(p.online) - num(p.sbc) - num(p.dbc) - creditFilledForProduct;
                   return (
                     <tr key={p.id}>
                       <td style={{ fontWeight: 600, color: T.accent, whiteSpace: "nowrap" }}>{PRODUCTS[i].label}</td>
@@ -444,7 +446,17 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                           <select
                             className="inp-inline left"
                             value={x.productId || "p14"}
-                            onChange={(e) => listSet("creditSales", x.id, "productId", e.target.value)}
+                            onChange={(e) => {
+                              const newProd = e.target.value;
+                              const rate = getCurrentRate(newProd, prices);
+                              setEntry(prev => ({
+                                ...prev,
+                                creditSales: prev.creditSales.map(cs => cs.id === x.id
+                                  ? { ...cs, productId: newProd, amt: num(cs.filledQty) > 0 ? String(num(cs.filledQty) * rate) : cs.amt }
+                                  : cs
+                                )
+                              }));
+                            }}
                             disabled={!canEdit}
                             style={{ fontSize: 12 }}
                           >
@@ -459,7 +471,17 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                             type="number"
                             placeholder="0"
                             value={x.filledQty || ""}
-                            onChange={(e) => listSet("creditSales", x.id, "filledQty", e.target.value)}
+                            onChange={(e) => {
+                              const newQty = e.target.value;
+                              const rate = getCurrentRate(x.productId || "p14", prices);
+                              setEntry(prev => ({
+                                ...prev,
+                                creditSales: prev.creditSales.map(cs => cs.id === x.id
+                                  ? { ...cs, filledQty: newQty, amt: num(newQty) > 0 ? String(num(newQty) * rate) : cs.amt }
+                                  : cs
+                                )
+                              }));
+                            }}
                             readOnly={!canEdit}
                             style={{ textAlign: "center", width: 60 }}
                             title="Filled cylinders taken by customer on credit"
@@ -837,12 +859,11 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                   const a = (entry.arrivals || []).find(x => x.productId === p.id) || {};
                   const prod = (entry.products || []).find(x => x.id === p.id) || {};
 
-                  const totalFull = num(prod.openingStock) + (entry.hasArrival ? num(a.filledReceived) : 0) - num(prod.sell) - num(prod.online) - num(prod.sbc) - num(prod.dbc);
-                  // Empty cylinder logic: start with 0, add empty returned, subtract empty sent
-                  // But wait, the system doesn't track opening empty cylinders right now, or does it?
-                  // The previous formula was `num(g.empty) - received + sold`. 
-                  // If opening stock is missing, we'll just show the net difference for today.
-                  const totalEmpty = (num(prod.sell) + num(prod.online) + num(prod.sbc) + num(prod.dbc)) - (entry.hasArrival ? num(a.emptyReturned) : 0);
+                  const totalFull = num(prod.openingStock) + (entry.hasArrival ? num(a.filledReceived) : 0) - num(prod.sell) - num(prod.online) - num(prod.sbc) - num(prod.dbc)
+                    - (entry.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.filledQty), 0);
+                  // Empty: cash/online customers give empties back + credit customers who returned empties - sent back to plant
+                  const creditEmptyForProduct = (entry.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.emptyQty), 0);
+                  const totalEmpty = (num(prod.sell) + num(prod.online) + num(prod.sbc) + num(prod.dbc)) + creditEmptyForProduct - (entry.hasArrival ? num(a.emptyReturned) : 0);
 
                   return (
                     <tr key={p.id}>
@@ -860,7 +881,7 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
             </table>
           </div>
           <div style={{ padding: "10px 16px", fontSize: 11, color: T.inkLight, fontStyle: "italic", borderTop: "1px solid rgba(0,119,255,0.1)" }}>
-            * Full = Opening Stock + Received − Sold(Cash+Online) − SBC − DBC · Empty = Sold(Cash+Online+SBC+DBC) − Sent to Plant
+            * Full = Opening + Received - Credit Filled - Sold(Cash+Online+SBC+DBC) | Empty = Sold + Credit Empty Received - Sent to Plant
           </div>
         </div>
       </div>
