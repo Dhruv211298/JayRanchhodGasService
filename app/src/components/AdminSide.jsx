@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { api } from "../api";
 import { T } from "../styles";
 import { 
@@ -378,6 +378,30 @@ export function AdminDayDetail({ entry, commissions }) {
               </table>
             </div>
           </div>
+
+          <div className="card">
+            <div className="card-head"><span className="card-head-title">💳 Credit Sales</span><span style={{fontWeight:700,color:T.danger}}>{inr(calcs.totalCredit)}</span></div>
+            <div style={{overflowX:"auto"}}>
+              <table className="tbl">
+                <thead><tr><th>Customer</th><th>Product</th><th style={{textAlign:"center"}}>Filled</th><th style={{textAlign:"center"}}>Empty</th><th style={{textAlign:"right"}}>Amount</th></tr></thead>
+                <tbody>
+                  {(entry.creditSales||[]).filter(x=>x.customerName||x.amt).map((x,idx)=>{
+                    const prodDef = x.productId ? PRODUCTS.find(p=>p.id===x.productId) : null;
+                    return (
+                      <tr key={idx}>
+                        <td style={{fontWeight:600}}>{x.customerName}{x.remarks && <div style={{fontSize:10,color:T.inkLight,fontStyle:"italic"}}>📝 {x.remarks}</div>}</td>
+                        <td style={{color:T.blue,fontWeight:600,fontSize:12}}>{prodDef ? prodDef.short : "—"}</td>
+                        <td style={{textAlign:"center",color:T.success,fontWeight:600}}>{x.filledQty > 0 ? x.filledQty : "—"}</td>
+                        <td style={{textAlign:"center",color:"#e67e22",fontWeight:600}}>{x.emptyQty > 0 ? x.emptyQty : "—"}</td>
+                        <td style={{fontWeight:600,color:T.danger,textAlign:"right"}}>{inr(x.amt)}</td>
+                      </tr>
+                    );
+                  })}
+                  {!(entry.creditSales||[]).some(x=>x.customerName||x.amt) && <tr><td colSpan={5} style={{textAlign:"center",padding:10,color:T.inkLight}}>No credit sales</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -500,6 +524,7 @@ export function AdminSalaryReport({ entries, employees }) {
 
 export function AdminCreditOverview({ pending }) {
   const [filter, setFilter] = useState("all");
+  const [expanded, setExpanded] = useState(null);
   const outstanding = pending.filter(p=>!p.cleared).reduce((s,p)=>s+(p.originalAmt-p.recovered),0);
   const recovered   = pending.reduce((s,p)=>s+p.recovered,0);
   const total       = pending.reduce((s,p)=>s+p.originalAmt,0);
@@ -528,6 +553,7 @@ export function AdminCreditOverview({ pending }) {
         {[["all","All Customers"],["pending","Pending"],["cleared","Cleared"]].map(([v,l])=>(
           <button key={v} className="btn-ghost" style={{background:filter===v?T.accent:"transparent",color:filter===v?"#fff":T.inkMid,borderColor:filter===v?T.accent:T.border}} onClick={()=>setFilter(v)}>{l}</button>
         ))}
+        <span style={{ fontSize: 11, color: T.inkLight, alignSelf: "center", marginLeft: 4 }}>Click row to expand</span>
       </div>
 
       <div className="card">
@@ -538,15 +564,39 @@ export function AdminCreditOverview({ pending }) {
               {customers.length===0 && <tr><td colSpan={6} style={{textAlign:"center",padding:32,color:T.inkLight}}>No records.</td></tr>}
               {customers.map(c=>{
                 const due = c.total-c.recovered;
+                const isOpen = expanded === c.name;
                 return (
-                  <tr key={c.name}>
-                    <td style={{fontWeight:700}}>{c.name}</td>
-                    <td style={{color:T.inkMid, textAlign: "right"}}>{c.entries.length}</td>
-                    <td style={{fontWeight:600, textAlign: "right"}}>{inr(c.total)}</td>
-                    <td style={{color:T.success,fontWeight:600, textAlign: "right"}}>{inr(c.recovered)}</td>
-                    <td style={{color:due>0?T.danger:T.success,fontWeight:700, textAlign: "right"}}>{inr(due)}</td>
-                    <td style={{ textAlign: "center" }}><span className={`badge ${due<=0?"badge-success":"badge-danger"}`}>{due<=0?"CLEARED":"PENDING"}</span></td>
-                  </tr>
+                  <React.Fragment key={c.name}>
+                    <tr style={{ cursor: "pointer", background: isOpen ? "#f0f7ff" : "transparent" }} onClick={() => setExpanded(isOpen ? null : c.name)}>
+                      <td style={{fontWeight:700}}>{c.name} <span style={{fontSize:10,color:T.inkLight,marginLeft:4}}>{isOpen ? "▲" : "▼"}</span></td>
+                      <td style={{color:T.inkMid, textAlign: "right"}}>{c.entries.length}</td>
+                      <td style={{fontWeight:600, textAlign: "right"}}>{inr(c.total)}</td>
+                      <td style={{color:T.success,fontWeight:600, textAlign: "right"}}>{inr(c.recovered)}</td>
+                      <td style={{color:due>0?T.danger:T.success,fontWeight:700, textAlign: "right"}}>{inr(due)}</td>
+                      <td style={{ textAlign: "center" }}><span className={`badge ${due<=0?"badge-success":"badge-danger"}`}>{due<=0?"CLEARED":"PENDING"}</span></td>
+                    </tr>
+                    {isOpen && c.entries.map(ent => {
+                      const prodDef = ent.productId ? PRODUCTS.find(p => p.id === ent.productId) : null;
+                      const entryDue = ent.originalAmt - ent.recovered;
+                      return (
+                        <tr key={ent.id} style={{ background: "#f8fbff", fontSize: 12 }}>
+                          <td style={{ paddingLeft: 28, color: T.inkMid }}>
+                            <div style={{ fontSize: 11, color: T.inkLight, marginBottom: 2 }}>{fmtDate(ent.date)}</div>
+                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                              {prodDef && <span style={{ fontSize: 10, background: "#e8f0fe", color: T.blue, borderRadius: 3, padding: "1px 6px", fontWeight: 600 }}>{prodDef.short}</span>}
+                              {ent.filledQty > 0 && <span style={{ fontSize: 10, color: T.success, fontWeight: 600 }}>↓ {ent.filledQty} filled</span>}
+                              {ent.emptyQty > 0 && <span style={{ fontSize: 10, color: "#e67e22", fontWeight: 600 }}>↑ {ent.emptyQty} empty</span>}
+                            </div>
+                            {ent.remarks && <div style={{ fontSize: 10, color: T.inkLight, fontStyle: "italic", marginTop: 2 }}>📝 {ent.remarks}</div>}
+                          </td>
+                          <td colSpan={2} style={{ color: T.ink, textAlign: "right", fontSize: 12 }}>{inr(ent.originalAmt)}</td>
+                          <td style={{ color: T.success, textAlign: "right", fontSize: 12 }}>{inr(ent.recovered)}</td>
+                          <td style={{ color: entryDue > 0 ? T.danger : T.success, fontWeight: 600, textAlign: "right", fontSize: 12 }}>{inr(entryDue)}</td>
+                          <td style={{ textAlign: "center" }}><span className={`badge ${ent.cleared ? "badge-success" : "badge-danger"}`} style={{ fontSize: 9 }}>{ent.cleared ? "PAID" : "DUE"}</span></td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
                 );
               })}
             </tbody>

@@ -37,6 +37,7 @@ const num = (v) => parseFloat(v) || 0;
 // Auto-migration: add for_month column to employee_payments if missing.
 // Uses SHOW COLUMNS check for compatibility with all MySQL 8.x versions.
 async function runMigrations() {
+  // Migration 1: for_month column on employee_payments
   try {
     const [cols] = await pool.query("SHOW COLUMNS FROM employee_payments LIKE 'for_month'");
     if (cols.length === 0) {
@@ -45,6 +46,20 @@ async function runMigrations() {
     }
   } catch (e) {
     console.warn('Migration warning (non-fatal):', e.message);
+  }
+
+  // Migration 2: product_id, filled_qty, empty_qty, remarks on credit_ledger
+  try {
+    const [clCols] = await pool.query("SHOW COLUMNS FROM credit_ledger LIKE 'product_id'");
+    if (clCols.length === 0) {
+      await pool.query("ALTER TABLE credit_ledger ADD COLUMN product_id VARCHAR(50) NULL COMMENT 'p14/p19/p5'");
+      await pool.query("ALTER TABLE credit_ledger ADD COLUMN filled_qty INT DEFAULT 0 COMMENT 'Filled cylinders taken on credit'");
+      await pool.query("ALTER TABLE credit_ledger ADD COLUMN empty_qty INT DEFAULT 0 COMMENT 'Empty cylinders returned against credit'");
+      await pool.query("ALTER TABLE credit_ledger ADD COLUMN remarks VARCHAR(255) DEFAULT '' COMMENT 'Optional note'");
+      console.log('Migration: added product_id, filled_qty, empty_qty, remarks to credit_ledger');
+    }
+  } catch (e) {
+    console.warn('Migration credit_ledger warning (non-fatal):', e.message);
   }
 }
 
@@ -69,7 +84,7 @@ app.get('/api/load', async (req, res) => {
     const [vehicleRows] = await pool.query('SELECT id, vehicle_no, type, capacity FROM vehicles WHERE is_active = 1 ORDER BY sort_order ASC, id ASC');
     
     // 5. Load Pending Credits
-    const [ledgerRows] = await pool.query(`SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as date, customer_name as customerName, original_amount as originalAmt, cleared FROM credit_ledger`);
+    const [ledgerRows] = await pool.query(`SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as date, customer_name as customerName, original_amount as originalAmt, cleared, COALESCE(product_id, '') as productId, COALESCE(filled_qty, 0) as filledQty, COALESCE(empty_qty, 0) as emptyQty, COALESCE(remarks, '') as remarks FROM credit_ledger`);
     const [paymentRows] = await pool.query(`
       SELECT p.ledger_id, DATE_FORMAT(p.payment_date, '%Y-%m-%d') as date, p.amount as amt, p.note, l.customer_name as customerName 
       FROM credit_payments p 
@@ -86,7 +101,11 @@ app.get('/api/load', async (req, res) => {
         originalAmt: num(l.originalAmt),
         recovered,
         cleared: l.cleared === 1 || recovered >= num(l.originalAmt),
-        payments
+        payments,
+        productId: l.productId || '',
+        filledQty: num(l.filledQty),
+        emptyQty: num(l.emptyQty),
+        remarks: l.remarks || ''
       };
     });
 
@@ -96,7 +115,7 @@ app.get('/api/load', async (req, res) => {
     const [deliveryRows] = await pool.query(`SELECT d.cash_qty, d.online_qty, d.qty_delivered, DATE_FORMAT(d.entry_date, '%Y-%m-%d') as entry_date, b.name FROM daily_deliveries d JOIN employees b ON d.delivery_boy_id = b.id`);
     const [expRows] = await pool.query("SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, description as `desc`, amount as amt FROM daily_expenses");
     const [chequeRows] = await pool.query("SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, description as `desc`, amount as amt FROM daily_cheque_online");
-    const [creditSalesRows] = await pool.query(`SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, customer_name as customerName, original_amount as amt FROM credit_ledger`);
+    const [creditSalesRows] = await pool.query(`SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, customer_name as customerName, original_amount as amt, COALESCE(product_id, '') as productId, COALESCE(filled_qty, 0) as filledQty, COALESCE(empty_qty, 0) as emptyQty, COALESCE(remarks, '') as remarks FROM credit_ledger`);
     const [vehExpRows] = await pool.query("SELECT dve.id, DATE_FORMAT(dve.entry_date, '%Y-%m-%d') as entry_date, dve.vehicle_id as vehicleId, COALESCE(v.vehicle_no, '') as vehicleNo, dve.expense_type as expType, dve.description as `desc`, dve.amount as amt FROM daily_vehicle_expenses dve LEFT JOIN vehicles v ON dve.vehicle_id = v.id");
     // Load salary payments — query for_month safely with a fallback
     let salPayRows = [];
@@ -137,7 +156,7 @@ app.get('/api/load', async (req, res) => {
       
       const expenses = expRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, desc: x.desc, amt: x.amt || "" }));
       const chequeOnline = chequeRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, desc: x.desc, amt: x.amt || "" }));
-      const creditSales = creditSalesRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, customerName: x.customerName, amt: x.amt || "" }));
+      const creditSales = creditSalesRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, customerName: x.customerName, amt: x.amt || "", productId: x.productId || "", filledQty: x.filledQty || "", emptyQty: x.emptyQty || "", remarks: x.remarks || "" }));
       const vehicleExpenses = vehExpRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, vehicleId: x.vehicleId || '', vehicleNo: x.vehicleNo || '', expType: x.expType || 'Fuel', desc: x.desc || '', amt: x.amt || '' }));
       const salaryPayments = salPayRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, employeeId: x.employeeId, employeeName: x.employeeName, amt: x.amt || "", type: x.type, notes: x.notes || "", forMonth: x.forMonth || null }));
       const creditRecoveries = paymentRows.filter(p => p.date === date).map(p => ({
@@ -260,10 +279,10 @@ app.post('/api/entries', async (req, res) => {
           const ledgerId = cs.id && cs.id.startsWith(date + '-') ? cs.id : `${date}-${cs.id}`;
           activeIds.push(ledgerId);
           await connection.query(`
-            INSERT INTO credit_ledger (id, entry_date, customer_name, original_amount, cleared) 
-            VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE customer_name = VALUES(customer_name), original_amount = VALUES(original_amount)
-          `, [ledgerId, date, cs.customerName.trim().toUpperCase(), num(cs.amt), false]);
+            INSERT INTO credit_ledger (id, entry_date, customer_name, original_amount, cleared, product_id, filled_qty, empty_qty, remarks) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE customer_name = VALUES(customer_name), original_amount = VALUES(original_amount), product_id = VALUES(product_id), filled_qty = VALUES(filled_qty), empty_qty = VALUES(empty_qty), remarks = VALUES(remarks)
+          `, [ledgerId, date, cs.customerName.trim().toUpperCase(), num(cs.amt), false, cs.productId || null, num(cs.filledQty), num(cs.emptyQty), cs.remarks || '']);
         }
       }
 

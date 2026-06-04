@@ -125,7 +125,7 @@ export const blankProduct = (pricesArr, lastEntry = null) => PRODUCTS.map((p) =>
 export const blankDelivery = (boysArr) => Object.fromEntries((boysArr || DEFAULT_BOYS).map((b) => [b, { cash: "", online: "" }]));
 export const blankExpense = () => ({ id: uid(), desc: "", amt: "" });
 export const blankCheque = () => ({ id: uid(), desc: "", amt: "" });
-export const blankCredit = () => ({ id: uid(), customerName: "", amt: "" });
+export const blankCredit = () => ({ id: uid(), customerName: "", productId: "p14", filledQty: "", emptyQty: "", amt: "", remarks: "" });
 export const blankVehicleExp = () => ({ id: uid(), vehicleId: "", vehicleNo: "", expType: "Fuel", desc: "", amt: "" });
 export const blankSalaryPayment = () => ({ id: uid(), employeeId: "", employeeName: "", amt: "", type: "Salary", notes: "", forMonth: new Date().toISOString().slice(0, 7) });
 export const blankArrival = () => PRODUCTS.map(p => ({ productId: p.id, filledReceived: "", emptyReturned: "" }));

@@ -406,43 +406,101 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
             <span style={{ fontWeight: 700, color: T.danger, fontSize: 13 }}>{inr(calcs.totalCredit)}</span>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
-            <table className="tbl">
-              <thead><tr><th style={{ width: "45%" }}>Customer Name</th><th style={{ textAlign: "right" }}>Amount</th><th>Status</th><th></th></tr></thead>
-              <tbody>
-                {entry.creditSales.map((x) => {
-                  const statusItem = (pending || []).find(p => p.id === x.id);
-                  let statusText = "New Credit";
-                  let statusColor = T.blue;
-                  if (statusItem) {
-                    if (statusItem.cleared) {
-                      statusText = "Cleared (Paid)";
-                      statusColor = T.success;
-                    } else if (statusItem.recovered > 0) {
-                      statusText = `Partially Paid (₹${statusItem.originalAmt - statusItem.recovered} left)`;
-                      statusColor = "orange";
-                    } else {
-                      statusText = "Unpaid";
-                      statusColor = T.danger;
+            <div style={{ overflowX: "auto" }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th style={{ width: "20%", minWidth: 130 }}>Customer Name</th>
+                    <th style={{ width: "14%", minWidth: 100 }}>Product</th>
+                    <th style={{ width: "10%", textAlign: "center" }}>Filled Cyl</th>
+                    <th style={{ width: "10%", textAlign: "center" }}>Empty Cyl</th>
+                    <th style={{ width: "12%", textAlign: "right" }}>Amount (₹)</th>
+                    <th style={{ width: "18%", minWidth: 120 }}>Remarks</th>
+                    <th>Status</th>
+                    <th style={{ width: 36 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entry.creditSales.map((x) => {
+                    const statusItem = (pending || []).find(p => p.id === x.id);
+                    let statusText = "New Credit";
+                    let statusColor = T.blue;
+                    if (statusItem) {
+                      if (statusItem.cleared) {
+                        statusText = "Cleared (Paid)";
+                        statusColor = T.success;
+                      } else if (statusItem.recovered > 0) {
+                        statusText = `Partially Paid (₹${statusItem.originalAmt - statusItem.recovered} left)`;
+                        statusColor = "orange";
+                      } else {
+                        statusText = "Unpaid";
+                        statusColor = T.danger;
+                      }
                     }
-                  }
-                  return (
-                    <tr key={x.id}>
-                      <td><input className="inp-inline left" type="text" placeholder="Customer name…" value={x.customerName} onChange={(e) => listSet("creditSales", x.id, "customerName", e.target.value)} readOnly={!canEdit} /></td>
-                      <td><input className="inp-inline" type="number" placeholder="0" value={x.amt} onChange={(e) => listSet("creditSales", x.id, "amt", e.target.value)} readOnly={!canEdit} /></td>
-                      <td style={{ color: statusColor, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", verticalAlign: "middle" }}>{statusText}</td>
-                      <td style={{ width: 36 }}>
-                        {canEdit && entry.creditSales.length > 1 && <button className="btn-icon" onClick={() => listRemove("creditSales", x.id)}>×</button>}
-                      </td>
-                    </tr>
-                  );
-                })}
-                <tr className="tbl-total">
-                  <td style={{ color: T.inkMid, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Total</td>
-                  <td style={{ color: T.danger, textAlign: "right" }}>{inr(calcs.totalCredit)}</td>
-                  <td colSpan={2} />
-                </tr>
-              </tbody>
-            </table>
+                    return (
+                      <tr key={x.id}>
+                        <td><input className="inp-inline left" type="text" placeholder="Customer name…" value={x.customerName} onChange={(e) => listSet("creditSales", x.id, "customerName", e.target.value)} readOnly={!canEdit} /></td>
+                        <td>
+                          <select
+                            className="inp-inline left"
+                            value={x.productId || "p14"}
+                            onChange={(e) => listSet("creditSales", x.id, "productId", e.target.value)}
+                            disabled={!canEdit}
+                            style={{ fontSize: 12 }}
+                          >
+                            {PRODUCTS.map(p => (
+                              <option key={p.id} value={p.id}>{p.short}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <input
+                            className="inp-inline"
+                            type="number"
+                            placeholder="0"
+                            value={x.filledQty || ""}
+                            onChange={(e) => listSet("creditSales", x.id, "filledQty", e.target.value)}
+                            readOnly={!canEdit}
+                            style={{ textAlign: "center", width: 60 }}
+                            title="Filled cylinders taken by customer on credit"
+                          />
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <input
+                            className="inp-inline"
+                            type="number"
+                            placeholder="0"
+                            value={x.emptyQty || ""}
+                            onChange={(e) => listSet("creditSales", x.id, "emptyQty", e.target.value)}
+                            readOnly={!canEdit}
+                            style={{ textAlign: "center", width: 60 }}
+                            title="Empty cylinders returned by customer"
+                          />
+                        </td>
+                        <td><input className="inp-inline" type="number" placeholder="0" value={x.amt} onChange={(e) => listSet("creditSales", x.id, "amt", e.target.value)} readOnly={!canEdit} /></td>
+                        <td><input className="inp-inline left" type="text" placeholder="Note…" value={x.remarks || ""} onChange={(e) => listSet("creditSales", x.id, "remarks", e.target.value)} readOnly={!canEdit} /></td>
+                        <td style={{ color: statusColor, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", verticalAlign: "middle" }}>{statusText}</td>
+                        <td style={{ width: 36 }}>
+                          {canEdit && entry.creditSales.length > 1 && <button className="btn-icon" onClick={() => listRemove("creditSales", x.id)}>×</button>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="tbl-total">
+                    <td style={{ color: T.inkMid, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Total</td>
+                    <td colSpan={3}>
+                      <span style={{ fontSize: 11, color: T.inkLight }}>
+                        Filled: <strong style={{ color: T.accent }}>{entry.creditSales.reduce((s, x) => s + (num(x.filledQty) || 0), 0)}</strong>
+                        {" · "}
+                        Empty: <strong style={{ color: T.inkMid }}>{entry.creditSales.reduce((s, x) => s + (num(x.emptyQty) || 0), 0)}</strong>
+                      </span>
+                    </td>
+                    <td style={{ color: T.danger, textAlign: "right" }}>{inr(calcs.totalCredit)}</td>
+                    <td colSpan={3} />
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             {canEdit && (
               <div style={{ padding: "6px 10px 10px" }}>
                 <button className="btn-add" onClick={() => listAdd("creditSales", blankCredit)}>+ Add Customer</button>
@@ -1028,12 +1086,35 @@ export function PendingCredits({ pending, onRecord }) {
       {filtered.map((p) => {
         const remaining = p.originalAmt - p.recovered;
         const pct = (p.recovered / p.originalAmt) * 100;
+        const prodDef = p.productId ? PRODUCTS.find(pr => pr.id === p.productId) : null;
         return (
           <div key={p.id} className={`pending-item${p.cleared ? " cleared" : ""}`}>
             <div className="pi-top">
               <div>
                 <div className="pi-name">{p.customerName}</div>
                 <div className="pi-meta">Credit on {fmtDate(p.date)}</div>
+                {(prodDef || p.filledQty > 0 || p.emptyQty > 0) && (
+                  <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+                    {prodDef && (
+                      <span style={{ fontSize: 11, background: "#f0f7ff", color: T.blue, borderRadius: 4, padding: "2px 8px", fontWeight: 600, border: `1px solid ${T.border}` }}>
+                        🛢️ {prodDef.short}
+                      </span>
+                    )}
+                    {p.filledQty > 0 && (
+                      <span style={{ fontSize: 11, background: "#f0fff4", color: T.success, borderRadius: 4, padding: "2px 8px", fontWeight: 600, border: `1px solid ${T.border}` }}>
+                        ↓ {p.filledQty} Filled Taken
+                      </span>
+                    )}
+                    {p.emptyQty > 0 && (
+                      <span style={{ fontSize: 11, background: "#fff7f0", color: "#e67e22", borderRadius: 4, padding: "2px 8px", fontWeight: 600, border: `1px solid ${T.border}` }}>
+                        ↑ {p.emptyQty} Empty Given
+                      </span>
+                    )}
+                  </div>
+                )}
+                {p.remarks && (
+                  <div style={{ fontSize: 11, color: T.inkLight, marginTop: 4, fontStyle: "italic" }}>📝 {p.remarks}</div>
+                )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 <span className={`badge ${p.cleared ? "badge-success" : remaining > 0 ? "badge-danger" : "badge-warn"}`}>
