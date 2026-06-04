@@ -863,7 +863,8 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                     - (entry.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.filledQty), 0);
                   // Empty: cash/online customers give empties back + credit customers who returned empties - sent back to plant
                   const creditEmptyForProduct = (entry.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.emptyQty), 0);
-                  const totalEmpty = (num(prod.sell) + num(prod.online) + num(prod.sbc) + num(prod.dbc)) + creditEmptyForProduct - (entry.hasArrival ? num(a.emptyReturned) : 0);
+                  const recoveredEmptyForProduct = (entry.creditRecoveries || []).filter(cr => cr.productId === p.id).reduce((s, cr) => s + num(cr.emptyReturned), 0);
+                  const totalEmpty = (num(prod.sell) + num(prod.online) + num(prod.sbc) + num(prod.dbc)) + creditEmptyForProduct + recoveredEmptyForProduct - (entry.hasArrival ? num(a.emptyReturned) : 0);
 
                   return (
                     <tr key={p.id}>
@@ -1079,6 +1080,7 @@ export function PendingCredits({ pending, onRecord }) {
   const [filter, setFilter] = useState("pending");
   const [modal, setModal] = useState(null);
   const [payAmt, setPayAmt] = useState("");
+  const [payEmpty, setPayEmpty] = useState("");
   const [payDate, setPayDate] = useState(todayStr());
   const [payNote, setPayNote] = useState("");
 
@@ -1088,9 +1090,11 @@ export function PendingCredits({ pending, onRecord }) {
 
   const submitPayment = async () => {
     const amt = num(payAmt);
-    if (!amt || !modal) return;
-    await onRecord(modal, amt, payDate, payNote);
-    setModal(null); setPayAmt(""); setPayNote(""); setPayDate(todayStr());
+    const emp = num(payEmpty);
+    if (payAmt === "" && payEmpty === "") return;
+    if (!modal) return;
+    await onRecord(modal, amt, payDate, payNote, emp);
+    setModal(null); setPayAmt(""); setPayEmpty(""); setPayNote(""); setPayDate(todayStr());
   };
 
   return (
@@ -1187,7 +1191,10 @@ export function PendingCredits({ pending, onRecord }) {
                 {p.payments.map((pay, idx) => (
                   <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0", borderBottom: idx < p.payments.length - 1 ? "1px solid #f5f3ee" : "none" }}>
                     <span style={{ color: T.inkMid }}>{fmtDate(pay.date)}{pay.note ? ` · ${pay.note}` : ""}</span>
-                    <span style={{ color: T.success, fontWeight: 600 }}>+{inr(pay.amt)}</span>
+                    <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {num(pay.emptyReturned) > 0 && <span style={{ color: "#e67e22", fontWeight: 600, fontSize: 11 }}>↑ {pay.emptyReturned} Empty</span>}
+                      {num(pay.amt) > 0 && <span style={{ color: T.success, fontWeight: 600 }}>+{inr(pay.amt)}</span>}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -1199,6 +1206,9 @@ export function PendingCredits({ pending, onRecord }) {
       {modal && (() => {
         const item = pending.find((p) => p.id === modal);
         const remaining = item ? item.originalAmt - item.recovered : 0;
+        const totalEmptyGiven = (item?.payments || []).reduce((s, p) => s + num(p.emptyReturned), 0);
+        const emptyDue = Math.max(0, (num(item?.filledQty) || 0) - (num(item?.emptyQty) || 0) - totalEmptyGiven);
+        
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999, padding: 16 }}>
             <div style={{ background: T.card, borderRadius: 12, padding: 24, width: "100%", maxWidth: 400, boxShadow: T.shadowMd }}>
@@ -1207,10 +1217,25 @@ export function PendingCredits({ pending, onRecord }) {
                 {item?.customerName} · Remaining: <strong style={{ color: T.danger }}>{inr(remaining)}</strong>
               </div>
               <div className="field"><label>Payment Date</label><input className="inp" type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></div>
-              <div className="field"><label>Amount Received (₹)</label><input className="inp" type="number" placeholder={`Max ${inr(remaining)}`} value={payAmt} onChange={(e) => setPayAmt(e.target.value)} /></div>
+              
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="field">
+                  <label>Amount (₹)</label>
+                  <input className="inp" type="number" placeholder={`Max ${inr(remaining)}`} value={payAmt} onChange={(e) => setPayAmt(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>Empties Returned</label>
+                  <input className="inp" type="number" placeholder={`Max ${emptyDue}`} max={emptyDue} value={payEmpty} onChange={(e) => {
+                    let v = num(e.target.value);
+                    if (v > emptyDue) v = emptyDue;
+                    setPayEmpty(e.target.value === "" ? "" : v);
+                  }} />
+                </div>
+              </div>
+
               <div className="field"><label>Note (optional)</label><input className="inp" type="text" placeholder="Cash / Online / Cheque…" value={payNote} onChange={(e) => setPayNote(e.target.value)} /></div>
               <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-                <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { setModal(null); setPayAmt(""); setPayNote(""); }}>Cancel</button>
+                <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { setModal(null); setPayAmt(""); setPayEmpty(""); setPayNote(""); }}>Cancel</button>
                 <button className="btn-primary" style={{ flex: 2 }} onClick={submitPayment}>Save Payment</button>
               </div>
             </div>

@@ -142,8 +142,8 @@ export default function App() {
   };
 
   /* ── record a recovery payment against a pending credit ── */
-  const recordPayment = async (pendingId, payAmt, payDate, note) => {
-    await api.savePayment(pendingId, payAmt, payDate, note);
+  const recordPayment = async (pendingId, payAmt, payDate, note, emptyReturned) => {
+    await api.savePayment(pendingId, payAmt, payDate, note, emptyReturned);
     await loadData();
   };
 

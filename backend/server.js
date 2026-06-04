@@ -61,6 +61,17 @@ async function runMigrations() {
   } catch (e) {
     console.warn('Migration credit_ledger warning (non-fatal):', e.message);
   }
+
+  // Migration 3: empty_returned on credit_payments
+  try {
+    const [cpCols] = await pool.query("SHOW COLUMNS FROM credit_payments LIKE 'empty_returned'");
+    if (cpCols.length === 0) {
+      await pool.query("ALTER TABLE credit_payments ADD COLUMN empty_returned INT DEFAULT 0 COMMENT 'Empty cylinders returned in this payment'");
+      console.log('Migration: added empty_returned to credit_payments');
+    }
+  } catch (e) {
+    console.warn('Migration credit_payments warning (non-fatal):', e.message);
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -86,13 +97,13 @@ app.get('/api/load', async (req, res) => {
     // 5. Load Pending Credits
     const [ledgerRows] = await pool.query(`SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as date, customer_name as customerName, original_amount as originalAmt, cleared, COALESCE(product_id, '') as productId, COALESCE(filled_qty, 0) as filledQty, COALESCE(empty_qty, 0) as emptyQty, COALESCE(remarks, '') as remarks FROM credit_ledger`);
     const [paymentRows] = await pool.query(`
-      SELECT p.ledger_id, DATE_FORMAT(p.payment_date, '%Y-%m-%d') as date, p.amount as amt, p.note, l.customer_name as customerName 
+      SELECT p.ledger_id, DATE_FORMAT(p.payment_date, '%Y-%m-%d') as date, p.amount as amt, p.note, COALESCE(p.empty_returned, 0) as emptyReturned, l.customer_name as customerName, COALESCE(l.product_id, 'p14') as productId
       FROM credit_payments p 
       LEFT JOIN credit_ledger l ON p.ledger_id = l.id
     `);
     
     const pending = ledgerRows.map(l => {
-      const payments = paymentRows.filter(p => p.ledger_id === l.id).map(p => ({ date: p.date, amt: num(p.amt), note: p.note }));
+      const payments = paymentRows.filter(p => p.ledger_id === l.id).map(p => ({ date: p.date, amt: num(p.amt), note: p.note, emptyReturned: num(p.emptyReturned) }));
       const recovered = payments.reduce((sum, p) => sum + num(p.amt), 0);
       return {
         id: l.id,
@@ -162,8 +173,10 @@ app.get('/api/load', async (req, res) => {
       const creditRecoveries = paymentRows.filter(p => p.date === date).map(p => ({
         ledgerId: p.ledger_id,
         customerName: p.customerName || "UNKNOWN",
+        productId: p.productId,
         amt: p.amt || "",
-        note: p.note || ""
+        note: p.note || "",
+        emptyReturned: p.emptyReturned || 0
       }));
 
       return {
@@ -431,11 +444,11 @@ app.delete('/api/entries/:date', async (req, res) => {
    3. PAYMENT RECORDING
 ════════════════════════════════════════════════════════════════ */
 app.post('/api/payments', async (req, res) => {
-  const { ledgerId, amt, date, note } = req.body;
+  const { ledgerId, amt, date, note, emptyReturned } = req.body;
   try {
     const paymentId = Math.random().toString(36).slice(2, 9);
-    await pool.query('INSERT INTO credit_payments (id, ledger_id, payment_date, amount, note) VALUES (?, ?, ?, ?, ?)', 
-      [paymentId, ledgerId, date, num(amt), note || '']
+    await pool.query('INSERT INTO credit_payments (id, ledger_id, payment_date, amount, note, empty_returned) VALUES (?, ?, ?, ?, ?, ?)', 
+      [paymentId, ledgerId, date, num(amt), note || '', num(emptyReturned)]
     );
     
     // Check if cleared

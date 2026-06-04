@@ -16,7 +16,7 @@ export const api = {
     catch { return { prices: [], commissions: [], boys: [], vehicles: [], employees: [], pending: [], entries: [] }; }
   },
   saveEntry: async (entry) => fetch(`${API_URL}/entries`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) }),
-  savePayment: async (ledgerId, amt, date, note) => fetch(`${API_URL}/payments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ledgerId, amt, date, note }) }),
+  savePayment: async (ledgerId, amt, date, note, emptyReturned) => fetch(`${API_URL}/payments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ledgerId, amt, date, note, emptyReturned }) }),
 
   syncPrices: async (prices) => fetch(`${API_URL}/prices/sync`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(prices) }),
   syncCommissions: async (comms) => fetch(`${API_URL}/commissions/sync`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(comms) }),
