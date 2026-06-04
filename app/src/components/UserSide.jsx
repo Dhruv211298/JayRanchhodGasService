@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import Swal from "sweetalert2";
 import { T } from "../styles";
 import {
@@ -970,6 +970,7 @@ export function History({ entries, onEdit, isAdmin, onDelete }) {
                 <th colSpan="3" style={{ textAlign: "center", border: `1px solid ${T.border}`, padding: "6px 8px" }}>Expenses</th>
                 <th rowSpan="2" style={{ verticalAlign: "middle", textAlign: "center", border: `1px solid ${T.border}`, padding: "10px 8px" }}>Cash on Hand</th>
                 <th rowSpan="2" style={{ verticalAlign: "middle", textAlign: "center", border: `1px solid ${T.border}`, padding: "10px 8px" }}>Godown Stock</th>
+                <th rowSpan="2" style={{ verticalAlign: "middle", textAlign: "center", border: `1px solid ${T.border}`, padding: "10px 8px" }}>In-Out Stock (Auto)</th>
                 <th rowSpan="2" style={{ verticalAlign: "middle", textAlign: "center", border: `1px solid ${T.border}`, padding: "10px 8px" }}>Action</th>
               </tr>
               <tr style={{ background: T.cardAlt }}>
@@ -1028,6 +1029,23 @@ export function History({ entries, onEdit, isAdmin, onDelete }) {
                             <span style={{ color: T.success, marginLeft: 4 }}>{item.filled || 0}</span>
                             <span style={{ color: T.inkLight }}>/</span>
                             <span style={{ color: T.inkMid }}>{item.empty || 0}</span>
+                          </div>
+                        );
+                      })}
+                    </td>
+                    <td style={{ fontSize: 11, lineHeight: 1.2, whiteSpace: "nowrap", border: `1px solid ${T.border}` }}>
+                      {PRODUCTS.map((p) => {
+                        const prod = (e.products || []).find(x => x.id === p.id) || {};
+                        const a = (e.arrivals || []).find(x => x.productId === p.id) || {};
+                        const totalFull = num(prod.openingStock) + (e.hasArrival ? num(a.filledReceived) : 0) - num(prod.sell) - num(prod.online) - num(prod.sbc) - num(prod.dbc) - (e.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.filledQty), 0);
+                        const creditEmptyForProduct = (e.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.emptyQty), 0);
+                        const totalEmpty = (num(prod.sell) + num(prod.online) + num(prod.sbc) + num(prod.dbc)) + creditEmptyForProduct - (e.hasArrival ? num(a.emptyReturned) : 0);
+                        return (
+                          <div key={p.id} style={{ marginBottom: 2 }}>
+                            <span style={{ fontWeight: 600, color: T.inkMid }}>{p.short}:</span>
+                            <span style={{ color: T.success, marginLeft: 4 }}>{totalFull}</span>
+                            <span style={{ color: T.inkLight }}>/</span>
+                            <span style={{ color: T.danger }}>{totalEmpty}</span>
                           </div>
                         );
                       })}
