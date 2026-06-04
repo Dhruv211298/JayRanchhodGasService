@@ -1131,25 +1131,35 @@ export function PendingCredits({ pending, onRecord }) {
               <div>
                 <div className="pi-name">{p.customerName}</div>
                 <div className="pi-meta">Credit on {fmtDate(p.date)}</div>
-                {(prodDef || p.filledQty > 0 || p.emptyQty > 0) && (
-                  <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
-                    {prodDef && (
-                      <span style={{ fontSize: 11, background: "#f0f7ff", color: T.blue, borderRadius: 4, padding: "2px 8px", fontWeight: 600, border: `1px solid ${T.border}` }}>
-                        🛢️ {prodDef.short}
-                      </span>
-                    )}
-                    {p.filledQty > 0 && (
-                      <span style={{ fontSize: 11, background: "#f0fff4", color: T.success, borderRadius: 4, padding: "2px 8px", fontWeight: 600, border: `1px solid ${T.border}` }}>
-                        ↓ {p.filledQty} Filled Taken
-                      </span>
-                    )}
-                    {p.emptyQty > 0 && (
-                      <span style={{ fontSize: 11, background: "#fff7f0", color: "#e67e22", borderRadius: 4, padding: "2px 8px", fontWeight: 600, border: `1px solid ${T.border}` }}>
-                        ↑ {p.emptyQty} Empty Given
-                      </span>
-                    )}
-                  </div>
-                )}
+                {(prodDef || p.filledQty > 0 || p.emptyQty > 0) && (() => {
+                  const filled = num(p.filledQty) || 0;
+                  const empty = num(p.emptyQty) || 0;
+                  const emptyDue = filled - empty;
+                  return (
+                    <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+                      {prodDef && (
+                        <span style={{ fontSize: 11, background: "#f0f7ff", color: T.blue, borderRadius: 4, padding: "2px 8px", fontWeight: 600, border: `1px solid ${T.border}` }}>
+                          🛢️ {prodDef.short}
+                        </span>
+                      )}
+                      {filled > 0 && (
+                        <span style={{ fontSize: 11, background: "#f0fff4", color: T.success, borderRadius: 4, padding: "2px 8px", fontWeight: 600, border: `1px solid ${T.border}` }}>
+                          ↓ {filled} Filled Taken
+                        </span>
+                      )}
+                      {empty > 0 && (
+                        <span style={{ fontSize: 11, background: "#fff7f0", color: "#e67e22", borderRadius: 4, padding: "2px 8px", fontWeight: 600, border: `1px solid ${T.border}` }}>
+                          ↑ {empty} Empty Given
+                        </span>
+                      )}
+                      {emptyDue > 0 && (
+                        <span style={{ fontSize: 11, background: "#fff0f0", color: T.danger, borderRadius: 4, padding: "2px 8px", fontWeight: 600, border: `1px solid ${T.border}` }}>
+                          ⚠️ {emptyDue} Empty Due
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
                 {p.remarks && (
                   <div style={{ fontSize: 11, color: T.inkLight, marginTop: 4, fontStyle: "italic" }}>📝 {p.remarks}</div>
                 )}
