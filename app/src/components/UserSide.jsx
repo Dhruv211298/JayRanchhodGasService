@@ -1000,6 +1000,7 @@ export function History({ entries, onEdit, isAdmin, onDelete }) {
                 <th rowSpan="2" style={{ verticalAlign: "middle", textAlign: "center", border: `1px solid ${T.border}`, padding: "10px 8px" }}>Accessories Sale</th>
                 <th rowSpan="2" style={{ verticalAlign: "middle", textAlign: "center", border: `1px solid ${T.border}`, padding: "10px 8px" }}>Credit Sale</th>
                 <th rowSpan="2" style={{ verticalAlign: "middle", textAlign: "center", border: `1px solid ${T.border}`, padding: "10px 8px" }}>Credit Received</th>
+                <th rowSpan="2" style={{ verticalAlign: "middle", textAlign: "center", border: `1px solid ${T.border}`, padding: "10px 8px" }}>Other Cash Credit</th>
                 <th rowSpan="2" style={{ verticalAlign: "middle", textAlign: "center", border: `1px solid ${T.border}`, padding: "10px 8px" }}>Online/Cheque Deposit</th>
                 <th rowSpan="2" style={{ verticalAlign: "middle", textAlign: "center", border: `1px solid ${T.border}`, padding: "10px 8px" }}>BOB Bank Deposit</th>
                 <th colSpan="3" style={{ textAlign: "center", border: `1px solid ${T.border}`, padding: "6px 8px" }}>Expenses</th>
@@ -1020,7 +1021,7 @@ export function History({ entries, onEdit, isAdmin, onDelete }) {
             </thead>
             <tbody>
               {sorted.length === 0 && (
-                <tr><td colSpan={17} style={{ textAlign: "center", padding: 32, color: T.inkLight }}>No entries yet.</td></tr>
+                <tr><td colSpan={18} style={{ textAlign: "center", padding: 32, color: T.inkLight }}>No entries yet.</td></tr>
               )}
               {sorted.map((e) => {
                 const c = calcEntry(e);
@@ -1045,6 +1046,7 @@ export function History({ entries, onEdit, isAdmin, onDelete }) {
                     <td style={{ border: `1px solid ${T.border}`, textAlign: "right" }}>{inr(c.totalAccessorySales)}</td>
                     <td style={{ border: `1px solid ${T.border}`, textAlign: "right", color: T.danger }}>{inr(c.totalCredit)}</td>
                     <td style={{ border: `1px solid ${T.border}`, textAlign: "right", color: T.success }}>{inr(c.totalCreditRecoveries)}</td>
+                    <td style={{ border: `1px solid ${T.border}`, textAlign: "right", color: T.success }}>{c.totalOtherCashCredits > 0 ? inr(c.totalOtherCashCredits) : <span style={{ color: T.inkLight }}>—</span>}</td>
                     <td style={{ border: `1px solid ${T.border}`, textAlign: "right", color: T.blue }}>{inr(c.totalOnlineSales + c.totalCheque)}</td>
                     <td style={{ border: `1px solid ${T.border}`, textAlign: "right", color: T.danger }}>{inr(num(e.bob))}</td>
 
