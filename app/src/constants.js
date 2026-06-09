@@ -83,6 +83,7 @@ export const calcEntry = (e) => {
   const totalVehicleExp = (e.vehicleExpenses||[]).reduce((s, x) => s + num(x.amt), 0);
   const totalSalaryPayments = (e.salaryPayments||[]).reduce((s, x) => s + num(x.amt), 0);
   const totalCreditRecoveries = (e.creditRecoveries||[]).reduce((s, x) => s + num(x.amt), 0);
+  const totalOtherCashCredits = (e.otherCashCredits||[]).reduce((s, x) => s + num(x.amt), 0);
   // Identify same-day payments (recoveries received today for credit sales created today)
   const sameDayPayments = (e.creditRecoveries||[]).reduce((s, x) => {
     const isSameDay = x.ledgerId && e.date && x.ledgerId.startsWith(e.date + '-');
@@ -95,9 +96,9 @@ export const calcEntry = (e) => {
   const totalSales = totalCashSales + totalOnlineSales;
   const originalSales = originalCashSales + totalOnlineSales;
 
-  // Cash on Hand: Opening + Total Sales (Cash+Online) + Accessories + Credit Returns - OnlineAutoDeduction - Expenses - Vehicle - Salary - BOB Bank
-  const cashOnHand = num(e.openingCash) + totalSales + totalAccessorySales + totalCreditRecoveries - totalOnlineSales - totalExpenses - totalVehicleExp - totalSalaryPayments - num(e.bob);
-  return { totalSales, totalCashSales, totalOnlineSales, totalAccessorySales, totalDelivery, totalExpenses, totalCheque, totalCredit, totalVehicleExp, totalSalaryPayments, totalCreditRecoveries, cashOnHand, originalCashSales, originalSales, sameDayPayments, originalCredit };
+  // Cash on Hand: Opening + Total Sales (Cash+Online) + Accessories + Credit Returns + Other Cash Credits - OnlineAutoDeduction - Expenses - Vehicle - Salary - BOB Bank
+  const cashOnHand = num(e.openingCash) + totalSales + totalAccessorySales + totalCreditRecoveries + totalOtherCashCredits - totalOnlineSales - totalExpenses - totalVehicleExp - totalSalaryPayments - num(e.bob);
+  return { totalSales, totalCashSales, totalOnlineSales, totalAccessorySales, totalDelivery, totalExpenses, totalCheque, totalCredit, totalVehicleExp, totalSalaryPayments, totalCreditRecoveries, totalOtherCashCredits, cashOnHand, originalCashSales, originalSales, sameDayPayments, originalCredit };
 };
 
 /* ── blank templates ── */
@@ -130,6 +131,7 @@ export const blankVehicleExp = () => ({ id: uid(), vehicleId: "", vehicleNo: "",
 export const blankSalaryPayment = () => ({ id: uid(), employeeId: "", employeeName: "", amt: "", type: "Salary", notes: "", forMonth: new Date().toISOString().slice(0, 7) });
 export const blankArrival = () => PRODUCTS.map(p => ({ productId: p.id, filledReceived: "", emptyReturned: "" }));
 export const blankAccessory = (pricesArr) => ACCESSORIES.map(a => ({ accessoryId: a.id, sold: false, qty: "", rate: getCurrentRate(a.id, pricesArr) }));
+export const blankOtherCashCredit = () => ({ id: uid(), desc: "", amt: "" });
 
 export const blankGodownStock = (lastEntry = null) => PRODUCTS.map(p => {
   if (!lastEntry) return { productId: p.id, filled: "", empty: "" };
@@ -159,4 +161,5 @@ export const blankEntry = (pricesArr = [], boysArr = [], lastEntry = null) => ({
   hasArrival: false,
   arrivals: blankArrival(),
   accessories: blankAccessory(pricesArr),
+  otherCashCredits: [blankOtherCashCredit()],
 });

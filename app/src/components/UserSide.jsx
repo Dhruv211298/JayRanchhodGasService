@@ -4,7 +4,7 @@ import { T } from "../styles";
 import {
   PRODUCTS, ACCESSORIES, todayStr, fmtDate, fmtMonth, inr, num, getSalaryMonth,
   blankExpense, blankCheque, blankCredit, blankVehicleExp, blankSalaryPayment,
-  calcEntry, getCurrentRate
+  blankOtherCashCredit, calcEntry, getCurrentRate
 } from "../constants";
 
 const VEH_EXP_TYPES = ["Fuel", "Repair", "Maintenance", "Toll / Tax", "Washing", "Other"];
@@ -573,6 +573,40 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
         </div>
       </div>
 
+      {/* Other Cash Credit Card */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-head">
+          <span className="card-head-title">💵 Other Cash Credit</span>
+          <span style={{ fontWeight: 700, color: T.success, fontSize: 13 }}>{inr(calcs.totalOtherCashCredits)}</span>
+        </div>
+        <div className="card-body" style={{ padding: 0 }}>
+          <table className="tbl">
+            <thead><tr><th style={{ width: "65%" }}>Description</th><th style={{ textAlign: "right" }}>Amount (₹)</th><th style={{ width: 36 }}></th></tr></thead>
+            <tbody>
+              {(entry.otherCashCredits || []).map((x) => (
+                <tr key={x.id}>
+                  <td><input className="inp-inline left" type="text" placeholder="e.g. Misc income, refund…" value={x.desc} onChange={(e) => listSet("otherCashCredits", x.id, "desc", e.target.value)} readOnly={!canEdit} /></td>
+                  <td><input className="inp-inline" type="number" placeholder="0" value={x.amt} onChange={(e) => listSet("otherCashCredits", x.id, "amt", e.target.value)} readOnly={!canEdit} /></td>
+                  <td style={{ width: 36 }}>
+                    {canEdit && (entry.otherCashCredits || []).length > 1 && <button className="btn-icon" onClick={() => listRemove("otherCashCredits", x.id)}>×</button>}
+                  </td>
+                </tr>
+              ))}
+              <tr className="tbl-total">
+                <td style={{ color: T.inkMid, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Total</td>
+                <td style={{ color: T.success, textAlign: "right" }}>{inr(calcs.totalOtherCashCredits)}</td>
+                <td />
+              </tr>
+            </tbody>
+          </table>
+          {canEdit && (
+            <div style={{ padding: "6px 10px 10px" }}>
+              <button className="btn-add" onClick={() => listAdd("otherCashCredits", blankOtherCashCredit)}>+ Add Row</button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Combined Outflows & Expenses Card */}
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head" style={{ background: "linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(239, 68, 68, 0.01) 100%)", borderBottom: `1px solid ${T.border}` }}>
@@ -892,7 +926,7 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px 8px" }}>
           <div>
             <div className="coh-label">Cash on Hand</div>
-            <div className="coh-formula">Opening + Total Sales (Cash+Online) + Credit Received + Cheque/Online − Online/Cheque (→Bank) − Expenses − Vehicle − Salary − BOB Bank</div>
+            <div className="coh-formula">Opening + Cash Sales + Accessories + Credit Received + Other Cash Credits − Online (→Bank) − Expenses − Vehicle − Salary − BOB Bank</div>
           </div>
           <div className={`coh-amount${calcs.cashOnHand < 0 ? " negative" : ""}`}>{inr(calcs.cashOnHand)}</div>
         </div>
@@ -904,6 +938,7 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
             { label: "Online Sales (+)", val: calcs.totalOnlineSales, color: T.success },
             { label: "Accessories (+)", val: calcs.totalAccessorySales, color: T.success },
             { label: "Credit Received (+)", val: calcs.totalCreditRecoveries, color: T.success },
+            { label: "Other Cash Credit (+)", val: calcs.totalOtherCashCredits, color: T.success },
             { label: "Cheque/Online (+)", val: calcs.totalCheque, color: T.success },
             { label: "Online/Chq → Bank (−)", val: calcs.totalOnlineSales + calcs.totalCheque, color: "#e67e22", note: "auto" },
             { label: "Expenses (−)", val: calcs.totalExpenses, color: T.danger },

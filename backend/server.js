@@ -72,6 +72,22 @@ async function runMigrations() {
   } catch (e) {
     console.warn('Migration credit_payments warning (non-fatal):', e.message);
   }
+
+  // Migration 4: daily_other_cash_credits table
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS daily_other_cash_credits (
+        id VARCHAR(20) NOT NULL PRIMARY KEY,
+        entry_date DATE NOT NULL,
+        description VARCHAR(255) NOT NULL DEFAULT '',
+        amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+        INDEX idx_occ_date (entry_date)
+      ) ENGINE=InnoDB
+    `);
+    console.log('Migration: ensured daily_other_cash_credits table exists');
+  } catch (e) {
+    console.warn('Migration daily_other_cash_credits warning (non-fatal):', e.message);
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -140,6 +156,7 @@ app.get('/api/load', async (req, res) => {
     const [godownRows] = await pool.query("SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, product_id as productId, filled_qty as `filled`, empty_qty as `empty` FROM godown_stock");
     const [arrivalRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, product_id as productId, filled_received as filledReceived, empty_returned as emptyReturned FROM vehicle_arrivals`);
     const [accRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, accessory_id as accessoryId, qty, rate FROM daily_accessory_sales`);
+    const [occRows] = await pool.query("SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, description as `desc`, amount as amt FROM daily_other_cash_credits");
 
     const entries = entriesRows.map(e => {
       const date = e.date;
@@ -179,6 +196,8 @@ app.get('/api/load', async (req, res) => {
         emptyReturned: p.emptyReturned || 0
       }));
 
+      const otherCashCredits = occRows.filter(x => x.entry_date === date).map(x => ({ id: x.id, desc: x.desc, amt: x.amt || "" }));
+
       return {
         date,
         openingCash: e.openingCash || "",
@@ -191,6 +210,7 @@ app.get('/api/load', async (req, res) => {
         vehicleExpenses,
         salaryPayments,
         creditRecoveries,
+        otherCashCredits,
         godownStock: productsRows.map(p => {
           const row = godownRows.find(g => g.entry_date === date && g.productId === p.id);
           return { productId: p.id, filled: row ? row.filled : "", empty: row ? row.empty : "" };
@@ -386,6 +406,15 @@ app.post('/api/entries', async (req, res) => {
       }
     }
 
+    // 12. Process Other Cash Credits
+    await connection.query('DELETE FROM daily_other_cash_credits WHERE entry_date = ?', [date]);
+    if (entry.otherCashCredits) {
+      const occVals = entry.otherCashCredits.filter(x => x.desc || num(x.amt) > 0).map(x => [x.id, date, x.desc || '', num(x.amt)]);
+      if (occVals.length > 0) {
+        await connection.query('INSERT INTO daily_other_cash_credits (id, entry_date, description, amount) VALUES ?', [occVals]);
+      }
+    }
+
     await connection.commit();
     res.json({ success: true });
   } catch (error) {
@@ -423,6 +452,7 @@ app.delete('/api/entries/:date', async (req, res) => {
     await connection.query('DELETE FROM godown_stock WHERE entry_date = ?', [date]);
     await connection.query('DELETE FROM vehicle_arrivals WHERE entry_date = ?', [date]);
     await connection.query('DELETE FROM daily_accessory_sales WHERE entry_date = ?', [date]);
+    await connection.query('DELETE FROM daily_other_cash_credits WHERE entry_date = ?', [date]);
     // Delete the main daily entry row last
     await connection.query('DELETE FROM daily_entries WHERE entry_date = ?', [date]);
 

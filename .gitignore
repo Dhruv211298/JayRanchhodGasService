@@ -3,3 +3,5 @@ dist/
 .env
 !.env.production
 *.sql
+backend/fix_date.js
+backend/clear_aiven_entries.js
