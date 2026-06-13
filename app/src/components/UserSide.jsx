@@ -904,6 +904,7 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                   <th style={{ color: T.blue, textAlign: "center" }}>Product</th>
                   <th style={{ textAlign: "center", color: T.blue }}>Full Cylinder Stock</th>
                   <th style={{ textAlign: "center", color: T.blue }}>Empty Cylinder Stock</th>
+                  <th style={{ textAlign: "center", color: "#d97706", whiteSpace: "nowrap" }}>⚠️ Shortage / Stolen</th>
                 </tr>
               </thead>
               <tbody>
@@ -928,6 +929,24 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                       <td style={{ textAlign: "center", fontWeight: 700, color: T.danger, fontSize: 16 }}>
                         {totalEmpty}
                       </td>
+                      <td style={{ textAlign: "center" }}>
+                        {num(prod.shortage) > 0 ? (
+                          <span style={{
+                            fontWeight: 700,
+                            fontSize: 15,
+                            color: "#d97706",
+                            background: "rgba(245,158,11,0.12)",
+                            border: "1.5px solid #f59e0b",
+                            borderRadius: 6,
+                            padding: "2px 10px",
+                            display: "inline-block"
+                          }}>
+                            {num(prod.shortage)}
+                          </span>
+                        ) : (
+                          <span style={{ color: T.inkLight, fontSize: 13 }}>—</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -935,7 +954,7 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
             </table>
           </div>
           <div style={{ padding: "10px 16px", fontSize: 11, color: T.inkLight, fontStyle: "italic", borderTop: "1px solid rgba(0,119,255,0.1)" }}>
-            * Full = Opening + Received - Credit Filled - Sold(Cash+Online+SBC+DBC) | Empty = Sold + Credit Empty Received - Sent to Plant
+            * Full = Opening + Received - Credit Filled - Sold(Cash+Online+SBC+DBC) | Empty = Sold + Credit Empty Received - Sent to Plant | ⚠️ Shortage/Stolen = reminder from Products section above
           </div>
         </div>
       </div>
