@@ -908,17 +908,32 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                 </tr>
               </thead>
               <tbody>
-                {PRODUCTS.map((p, idx) => {
+                {(() => {
+                  // Find the most recent previous entry to use its godown empty stock as opening empty
+                  const prevEntry = [...entries]
+                    .filter(e => e.date < entry.date)
+                    .sort((a, b) => b.date.localeCompare(a.date))[0] || null;
+                  return PRODUCTS.map((p, idx) => {
                   const g = (entry.godownStock || []).find(x => x.productId === p.id) || {};
                   const a = (entry.arrivals || []).find(x => x.productId === p.id) || {};
                   const prod = (entry.products || []).find(x => x.id === p.id) || {};
 
                   const totalFull = num(prod.openingStock) + (entry.hasArrival ? num(a.filledReceived) : 0) - num(prod.sell) - num(prod.online) - num(prod.sbc) - num(prod.dbc)
                     - (entry.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.filledQty), 0);
-                  // Empty: cash/online customers give empties back + credit customers who returned empties - sent back to plant
+
+                  // Opening empty = previous day's closing godown empty stock (user physically counted and saved)
+                  const prevG = prevEntry ? (prevEntry.godownStock || []).find(x => x.productId === p.id) || {} : {};
+                  const openingEmpty = num(prevG.empty);
+
+                  // Empty IN today: customers returning empties when buying filled + credit/recovery empties returned
                   const creditEmptyForProduct = (entry.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.emptyQty), 0);
                   const recoveredEmptyForProduct = (entry.creditRecoveries || []).filter(cr => cr.productId === p.id).reduce((s, cr) => s + num(cr.emptyReturned), 0);
-                  const totalEmpty = (num(prod.sell) + num(prod.online) + num(prod.sbc) + num(prod.dbc)) + creditEmptyForProduct + recoveredEmptyForProduct - (entry.hasArrival ? num(a.emptyReturned) : 0);
+                  const emptyInToday = (num(prod.sell) + num(prod.online) + num(prod.sbc) + num(prod.dbc)) + creditEmptyForProduct + recoveredEmptyForProduct;
+                  // Empty OUT today: empties sent back to plant via vehicle
+                  const emptyOutToday = entry.hasArrival ? num(a.emptyReturned) : 0;
+
+                  // Closing Empty Stock = Opening + IN - OUT
+                  const totalEmpty = openingEmpty + emptyInToday - emptyOutToday;
 
                   return (
                     <tr key={p.id}>
@@ -949,12 +964,13 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                       </td>
                     </tr>
                   );
-                })}
+                  });
+                })()}
               </tbody>
             </table>
           </div>
           <div style={{ padding: "10px 16px", fontSize: 11, color: T.inkLight, fontStyle: "italic", borderTop: "1px solid rgba(0,119,255,0.1)" }}>
-            * Full = Opening + Received - Credit Filled - Sold(Cash+Online+SBC+DBC) | Empty = Sold + Credit Empty Received - Sent to Plant | ⚠️ Shortage/Stolen = reminder from Products section above
+            * Full = Opening + Received − Credit Filled − Sold(Cash+Online+SBC+DBC) | Empty = Prev Godown Empty (opening) + Empties IN today − Sent to Plant | ⚠️ Shortage/Stolen = reminder from Products section above
           </div>
         </div>
       </div>
