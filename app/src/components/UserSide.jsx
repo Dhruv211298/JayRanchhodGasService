@@ -909,30 +909,48 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
               </thead>
               <tbody>
                 {(() => {
-                  // Find the most recent previous entry to use its godown empty stock as opening empty
-                  const prevEntry = [...entries]
+                  // Compute the RUNNING In-Out Stock Master empty for each product from ALL
+                  // historical entries in chronological order.
+                  // openingEmpty for today = sum of (emptyIn - emptyOut) across all previous days
+                  // This is exactly what "prev day In-Out Stock Master empty" equals.
+                  const historicalEntries = [...entries]
                     .filter(e => e.date < entry.date)
-                    .sort((a, b) => b.date.localeCompare(a.date))[0] || null;
+                    .sort((a, b) => a.date.localeCompare(b.date));
+
+                  const openingEmptyByProduct = {};
+                  PRODUCTS.forEach(p => {
+                    let running = 0;
+                    for (const he of historicalEntries) {
+                      const heProd = (he.products || []).find(x => x.id === p.id) || {};
+                      const heA    = (he.arrivals || []).find(x => x.productId === p.id) || {};
+                      const heCreditEmpty    = (he.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.emptyQty), 0);
+                      const heRecoveryEmpty  = (he.creditRecoveries || []).filter(cr => cr.productId === p.id).reduce((s, cr) => s + num(cr.emptyReturned), 0);
+                      const heEmptyIn  = (num(heProd.sell) + num(heProd.online) + num(heProd.sbc) + num(heProd.dbc)) + heCreditEmpty + heRecoveryEmpty;
+                      const heEmptyOut = he.hasArrival ? num(heA.emptyReturned) : 0;
+                      running = running + heEmptyIn - heEmptyOut;
+                    }
+                    openingEmptyByProduct[p.id] = running;
+                  });
+
                   return PRODUCTS.map((p, idx) => {
-                  const g = (entry.godownStock || []).find(x => x.productId === p.id) || {};
-                  const a = (entry.arrivals || []).find(x => x.productId === p.id) || {};
+                  const g    = (entry.godownStock || []).find(x => x.productId === p.id) || {};
+                  const a    = (entry.arrivals || []).find(x => x.productId === p.id) || {};
                   const prod = (entry.products || []).find(x => x.id === p.id) || {};
 
                   const totalFull = num(prod.openingStock) + (entry.hasArrival ? num(a.filledReceived) : 0) - num(prod.sell) - num(prod.online) - num(prod.sbc) - num(prod.dbc)
                     - (entry.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.filledQty), 0);
 
-                  // Opening empty = previous day's closing godown empty stock (user physically counted and saved)
-                  const prevG = prevEntry ? (prevEntry.godownStock || []).find(x => x.productId === p.id) || {} : {};
-                  const openingEmpty = num(prevG.empty);
+                  // Opening empty = previous day's In-Out Stock Master auto-calculated empty (running total)
+                  const openingEmpty = openingEmptyByProduct[p.id] || 0;
 
                   // Empty IN today: customers returning empties when buying filled + credit/recovery empties returned
-                  const creditEmptyForProduct = (entry.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.emptyQty), 0);
+                  const creditEmptyForProduct   = (entry.creditSales || []).filter(cs => cs.productId === p.id).reduce((s, cs) => s + num(cs.emptyQty), 0);
                   const recoveredEmptyForProduct = (entry.creditRecoveries || []).filter(cr => cr.productId === p.id).reduce((s, cr) => s + num(cr.emptyReturned), 0);
-                  const emptyInToday = (num(prod.sell) + num(prod.online) + num(prod.sbc) + num(prod.dbc)) + creditEmptyForProduct + recoveredEmptyForProduct;
+                  const emptyInToday  = (num(prod.sell) + num(prod.online) + num(prod.sbc) + num(prod.dbc)) + creditEmptyForProduct + recoveredEmptyForProduct;
                   // Empty OUT today: empties sent back to plant via vehicle
                   const emptyOutToday = entry.hasArrival ? num(a.emptyReturned) : 0;
 
-                  // Closing Empty Stock = Opening + IN - OUT
+                  // Closing Empty = Opening (prev day In-Out Master) + IN today − OUT today
                   const totalEmpty = openingEmpty + emptyInToday - emptyOutToday;
 
                   return (
