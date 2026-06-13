@@ -1,10 +1,37 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'jrgs-super-secret-jwt-key-2024-change-in-prod';
+const JWT_EXPIRES_IN = '1h'; // Session duration: 1 hour
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+/* ════════════════════════════════════════════════════════════════
+   JWT AUTH MIDDLEWARE
+   Verifies Bearer token on every protected route.
+   Sets req.user = { username, role } on success.
+════════════════════════════════════════════════════════════════ */
+function verifyToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'No token provided. Please log in.' });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded; // { username, role, iat, exp }
+    next();
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Session expired. Please log in again.', expired: true });
+    }
+    return res.status(401).json({ error: 'Invalid token. Please log in again.' });
+  }
+}
 
 // Database connection pool
 const pool = mysql.createPool({
@@ -93,7 +120,7 @@ async function runMigrations() {
 /* ════════════════════════════════════════════════════════════════
    1. MASTER LOAD ENDPOINT (Replaces initial dbGet Promise.all)
 ════════════════════════════════════════════════════════════════ */
-app.get('/api/load', async (req, res) => {
+app.get('/api/load', verifyToken, async (req, res) => {
   try {
     // 1. Load Master Data
     const [productsRows] = await pool.query('SELECT id FROM products');
@@ -237,7 +264,7 @@ app.get('/api/load', async (req, res) => {
 /* ════════════════════════════════════════════════════════════════
    2. DAILY ENTRY SAVE (Transaction)
 ════════════════════════════════════════════════════════════════ */
-app.post('/api/entries', async (req, res) => {
+app.post('/api/entries', verifyToken, async (req, res) => {
   const entry = req.body;
   const date = entry.date;
   const connection = await pool.getConnection();
@@ -431,7 +458,7 @@ app.post('/api/entries', async (req, res) => {
    Removes ONLY the day's operational entry data.
    Salary payments and credit ledger are kept as permanent records.
 ════════════════════════════════════════════════════════════════ */
-app.delete('/api/entries/:date', async (req, res) => {
+app.delete('/api/entries/:date', verifyToken, async (req, res) => {
   const date = req.params.date;
 
   // Safety: validate date format (must be YYYY-MM-DD)
@@ -473,7 +500,7 @@ app.delete('/api/entries/:date', async (req, res) => {
 /* ════════════════════════════════════════════════════════════════
    3. PAYMENT RECORDING
 ════════════════════════════════════════════════════════════════ */
-app.post('/api/payments', async (req, res) => {
+app.post('/api/payments', verifyToken, async (req, res) => {
   const { ledgerId, amt, date, note, emptyReturned } = req.body;
   try {
     const paymentId = Math.random().toString(36).slice(2, 9);
@@ -499,9 +526,7 @@ app.post('/api/payments', async (req, res) => {
 /* ════════════════════════════════════════════════════════════════
    4. SYNC ADMIN CONFIGS (Boys, Prices, Commissions)
 ════════════════════════════════════════════════════════════════ */
-
-
-app.post('/api/prices/sync', async (req, res) => {
+app.post('/api/prices/sync', verifyToken, async (req, res) => {
   const arr = req.body; // Array of { id, productId, rate, date, note }
   const connection = await pool.getConnection();
   try {
@@ -522,7 +547,7 @@ app.post('/api/prices/sync', async (req, res) => {
   }
 });
 
-app.post('/api/commissions/sync', async (req, res) => {
+app.post('/api/commissions/sync', verifyToken, async (req, res) => {
   const arr = req.body; // Array of { id, productId, perCyl, date, note }
   const connection = await pool.getConnection();
   try {
@@ -545,21 +570,44 @@ app.post('/api/commissions/sync', async (req, res) => {
 /* ════════════════════════════════════════════════════════════════
    5. AUTHENTICATION AND USER MANAGEMENT
 ════════════════════════════════════════════════════════════════ */
+
+// Public: Login — issues a signed JWT on success
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required.' });
+  }
   try {
-    const [rows] = await pool.query('SELECT role FROM users WHERE username = ? AND password = ?', [username, password]);
+    const [rows] = await pool.query('SELECT id, role FROM users WHERE username = ? AND password = ?', [username, password]);
     if (rows.length > 0) {
-      res.json({ success: true, role: rows[0].role });
+      const payload = { username, role: rows[0].role };
+      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+      res.json({ success: true, token, role: rows[0].role });
     } else {
-      res.status(401).json({ error: "Invalid username or password" });
+      res.status(401).json({ error: 'Invalid username or password.' });
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/users', async (req, res) => {
+// Public: Verify Session — checks if a stored token is still valid
+app.post('/api/verify-session', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ valid: false, error: 'No token.' });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    res.json({ valid: true, role: decoded.role, username: decoded.username, exp: decoded.exp });
+  } catch (err) {
+    res.status(401).json({ valid: false, error: err.name === 'TokenExpiredError' ? 'Session expired.' : 'Invalid token.' });
+  }
+});
+
+// Protected: User management (admin only in practice, token required)
+app.get('/api/users', verifyToken, async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT id, username, role FROM users');
     res.json(rows);
@@ -568,7 +616,7 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', verifyToken, async (req, res) => {
   const { username, password, role } = req.body;
   try {
     await pool.query('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', [username, password, role]);
@@ -578,7 +626,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', verifyToken, async (req, res) => {
   try {
     await pool.query('DELETE FROM users WHERE id = ?', [req.params.id]);
     res.json({ success: true });
@@ -590,7 +638,7 @@ app.delete('/api/users/:id', async (req, res) => {
 /* ════════════════════════════════════════════════════════════════
    6. VEHICLE MASTER
 ════════════════════════════════════════════════════════════════ */
-app.get('/api/vehicles', async (req, res) => {
+app.get('/api/vehicles', verifyToken, async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM vehicles ORDER BY sort_order ASC, id ASC');
     res.json(rows);
@@ -599,7 +647,7 @@ app.get('/api/vehicles', async (req, res) => {
   }
 });
 
-app.post('/api/vehicles', async (req, res) => {
+app.post('/api/vehicles', verifyToken, async (req, res) => {
   const { vehicleNo, type, capacity, notes } = req.body;
   try {
     const [result] = await pool.query(
@@ -612,7 +660,7 @@ app.post('/api/vehicles', async (req, res) => {
   }
 });
 
-app.put('/api/vehicles/:id', async (req, res) => {
+app.put('/api/vehicles/:id', verifyToken, async (req, res) => {
   const { vehicleNo, type, capacity, notes, isActive } = req.body;
   try {
     await pool.query(
@@ -625,7 +673,7 @@ app.put('/api/vehicles/:id', async (req, res) => {
   }
 });
 
-app.patch('/api/vehicles/:id/toggle', async (req, res) => {
+app.patch('/api/vehicles/:id/toggle', verifyToken, async (req, res) => {
   try {
     await pool.query('UPDATE vehicles SET is_active = NOT is_active WHERE id = ?', [req.params.id]);
     res.json({ success: true });
@@ -634,7 +682,7 @@ app.patch('/api/vehicles/:id/toggle', async (req, res) => {
   }
 });
 
-app.delete('/api/vehicles/:id', async (req, res) => {
+app.delete('/api/vehicles/:id', verifyToken, async (req, res) => {
   try {
     await pool.query('DELETE FROM vehicles WHERE id = ?', [req.params.id]);
     res.json({ success: true });
@@ -646,7 +694,7 @@ app.delete('/api/vehicles/:id', async (req, res) => {
 /* ════════════════════════════════════════════════════════════════
    7. EMPLOYEE MASTER
 ════════════════════════════════════════════════════════════════ */
-app.get('/api/employees', async (req, res) => {
+app.get('/api/employees', verifyToken, async (req, res) => {
   try {
     const [rows] = await pool.query(`SELECT id, name, role, salary, phone, DATE_FORMAT(join_date, '%Y-%m-%d') as join_date, notes, is_active FROM employees ORDER BY name ASC`);
     res.json(rows);
@@ -655,7 +703,7 @@ app.get('/api/employees', async (req, res) => {
   }
 });
 
-app.post('/api/employees', async (req, res) => {
+app.post('/api/employees', verifyToken, async (req, res) => {
   const { name, role, salary, phone, joinDate, notes } = req.body;
   try {
     const [result] = await pool.query(
@@ -668,7 +716,7 @@ app.post('/api/employees', async (req, res) => {
   }
 });
 
-app.put('/api/employees/:id', async (req, res) => {
+app.put('/api/employees/:id', verifyToken, async (req, res) => {
   const { name, role, salary, phone, joinDate, notes, isActive } = req.body;
   try {
     await pool.query(
@@ -681,7 +729,7 @@ app.put('/api/employees/:id', async (req, res) => {
   }
 });
 
-app.patch('/api/employees/:id/toggle', async (req, res) => {
+app.patch('/api/employees/:id/toggle', verifyToken, async (req, res) => {
   try {
     await pool.query('UPDATE employees SET is_active = NOT is_active WHERE id = ?', [req.params.id]);
     res.json({ success: true });
@@ -690,7 +738,7 @@ app.patch('/api/employees/:id/toggle', async (req, res) => {
   }
 });
 
-app.delete('/api/employees/:id', async (req, res) => {
+app.delete('/api/employees/:id', verifyToken, async (req, res) => {
   try {
     await pool.query('DELETE FROM employees WHERE id = ?', [req.params.id]);
     res.json({ success: true });
@@ -702,7 +750,7 @@ app.delete('/api/employees/:id', async (req, res) => {
 /* ════════════════════════════════════════════════════════════════
    8. GODOWN STOCK
    ════════════════════════════════════════════════════════════════ */
-app.get('/api/godown-stock/:date', async (req, res) => {
+app.get('/api/godown-stock/:date', verifyToken, async (req, res) => {
   try {
     const [rows] = await pool.query(
       "SELECT product_id as productId, filled_qty as `filled`, empty_qty as `empty` FROM godown_stock WHERE entry_date = ?",
@@ -714,7 +762,7 @@ app.get('/api/godown-stock/:date', async (req, res) => {
   }
 });
 
-app.post('/api/godown-stock', async (req, res) => {
+app.post('/api/godown-stock', verifyToken, async (req, res) => {
   const { date, items } = req.body; // items: [{productId, filled, empty}]
   const connection = await pool.getConnection();
   try {

@@ -20,6 +20,7 @@ export default function App() {
 
   const [authedRole, setAuthedRole] = useState(null); // null | "user" | "admin"
   const [tab, setTab] = useState("entry");
+  const [sessionChecked, setSessionChecked] = useState(false); // true once startup verification is done
   
   const [entries, setEntries] = useState([]);
   const [pending, setPending] = useState([]); 
@@ -85,12 +86,37 @@ export default function App() {
   };
 
   useEffect(() => {
-    const savedRole = localStorage.getItem("authedRole");
-    if (savedRole) {
-      setAuthedRole(savedRole);
-      setTab(savedRole === "admin" ? "admin-entry" : "entry");
-    }
-    loadData();
+    // On startup: verify the stored JWT token against the server.
+    // This prevents stale/tampered tokens from granting access.
+    const initSession = async () => {
+      const result = await api.verifySession();
+      if (result.valid) {
+        setAuthedRole(result.role);
+        setTab(result.role === "admin" ? "admin-entry" : "entry");
+        await loadData();
+      } else {
+        // Token missing, expired, or invalid — clear it and show login
+        localStorage.removeItem("authToken");
+        setLoading(false);
+      }
+      setSessionChecked(true);
+    };
+    initSession();
+
+    // Listen for mid-session expiry (dispatched by api.js when any call returns 401)
+    const handleExpired = () => {
+      setAuthedRole(null);
+      setLoading(false);
+      Swal.fire({
+        title: "Session Expired",
+        text: "Your 1-hour session has ended. Please log in again.",
+        icon: "warning",
+        confirmButtonColor: "#0077ff",
+        confirmButtonText: "Log In"
+      });
+    };
+    window.addEventListener("session:expired", handleExpired);
+    return () => window.removeEventListener("session:expired", handleExpired);
   }, []);
 
   /* ── save daily entry ── */
@@ -167,21 +193,21 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("authedRole");
+    localStorage.removeItem("authToken");
     setAuthedRole(null);
   };
 
-  if (loading) return (
+  if (loading || !sessionChecked) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: T.bg, fontFamily: "'DM Sans',sans-serif", color: T.inkLight, letterSpacing: 2, fontSize: 13 }}>
       Loading…
     </div>
   );
 
-  if (!authedRole) return <LoginScreen onAuth={(r) => {
-    localStorage.setItem("authedRole", r);
-    setAuthedRole(r);
-    setTab(r === "admin" ? "admin-entry" : "entry");
-    loadData(); // Fresh load on login
+  if (!authedRole) return <LoginScreen onAuth={async ({ token, role }) => {
+    localStorage.setItem("authToken", token);
+    setAuthedRole(role);
+    setTab(role === "admin" ? "admin-entry" : "entry");
+    await loadData(); // Fresh load on login
   }} />;
 
   const TABS_USER = [

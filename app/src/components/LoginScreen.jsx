@@ -15,7 +15,7 @@ export default function LoginScreen({ onAuth }) {
     try {
       const res = await api.login(username, pw);
       if (res.success) {
-        onAuth(res.role);
+        onAuth({ token: res.token, role: res.role });
       } else { 
         setErr(res.error || "Login failed."); 
         setPw(""); 
