@@ -120,6 +120,7 @@ export const blankProduct = (pricesArr, lastEntry = null) => PRODUCTS.map((p) =>
     sbc: "", 
     dbc: "", 
     closingStock: "",
+    shortage: "",  // Reminder only — does NOT affect stock calculations
     remarks: ""
   };
 });

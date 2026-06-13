@@ -115,6 +115,17 @@ async function runMigrations() {
   } catch (e) {
     console.warn('Migration daily_other_cash_credits warning (non-fatal):', e.message);
   }
+
+  // Migration 5: shortage_qty column on daily_product_stock (informational reminder only)
+  try {
+    const [shrCols] = await pool.query("SHOW COLUMNS FROM daily_product_stock LIKE 'shortage_qty'");
+    if (shrCols.length === 0) {
+      await pool.query("ALTER TABLE daily_product_stock ADD COLUMN shortage_qty INT DEFAULT 0 COMMENT 'Shortage/Stolen reminder — informational only, does not affect stock calc'");
+      console.log('Migration: added shortage_qty to daily_product_stock');
+    }
+  } catch (e) {
+    console.warn('Migration shortage_qty warning (non-fatal):', e.message);
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -165,7 +176,7 @@ app.get('/api/load', verifyToken, async (req, res) => {
 
     // 6. Load Daily Entries
     const [entriesRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as date, opening_cash as openingCash, bob_bank as bob, has_vehicle_arrival as hasArrival FROM daily_entries`);
-    const [prodStockRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, product_id as id, opening_stock as openingStock, rate, sbc_rate as sbcRate, dbc_rate as dbcRate, sell_qty as sell, online_qty as online, sbc_qty as sbc, dbc_qty as dbc, closing_stock as closingStock, remarks FROM daily_product_stock`);
+    const [prodStockRows] = await pool.query(`SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, product_id as id, opening_stock as openingStock, rate, sbc_rate as sbcRate, dbc_rate as dbcRate, sell_qty as sell, online_qty as online, sbc_qty as sbc, dbc_qty as dbc, closing_stock as closingStock, COALESCE(shortage_qty, 0) as shortage, remarks FROM daily_product_stock`);
     const [deliveryRows] = await pool.query(`SELECT d.cash_qty, d.online_qty, d.qty_delivered, DATE_FORMAT(d.entry_date, '%Y-%m-%d') as entry_date, b.name FROM daily_deliveries d JOIN employees b ON d.delivery_boy_id = b.id`);
     const [expRows] = await pool.query("SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, description as `desc`, amount as amt FROM daily_expenses");
     const [chequeRows] = await pool.query("SELECT id, DATE_FORMAT(entry_date, '%Y-%m-%d') as entry_date, description as `desc`, amount as amt FROM daily_cheque_online");
@@ -198,6 +209,7 @@ app.get('/api/load', verifyToken, async (req, res) => {
         sbc: p.sbc || "",
         dbc: p.dbc || "",
         closingStock: p.closingStock || "",
+        shortage: p.shortage || "",
         remarks: p.remarks || ""
       }));
       
@@ -283,9 +295,9 @@ app.post('/api/entries', verifyToken, async (req, res) => {
     await connection.query('DELETE FROM daily_product_stock WHERE entry_date = ?', [date]);
     if (entry.products && entry.products.length > 0) {
       const prodVals = entry.products.map(p => [
-        date, p.id, num(p.openingStock), num(p.rate), num(p.sbcRate), num(p.dbcRate), num(p.sell), num(p.online), num(p.sbc), num(p.dbc), num(p.closingStock), p.remarks || ''
+        date, p.id, num(p.openingStock), num(p.rate), num(p.sbcRate), num(p.dbcRate), num(p.sell), num(p.online), num(p.sbc), num(p.dbc), num(p.closingStock), num(p.shortage), p.remarks || ''
       ]);
-      await connection.query('INSERT INTO daily_product_stock (entry_date, product_id, opening_stock, rate, sbc_rate, dbc_rate, sell_qty, online_qty, sbc_qty, dbc_qty, closing_stock, remarks) VALUES ?', [prodVals]);
+      await connection.query('INSERT INTO daily_product_stock (entry_date, product_id, opening_stock, rate, sbc_rate, dbc_rate, sell_qty, online_qty, sbc_qty, dbc_qty, closing_stock, shortage_qty, remarks) VALUES ?', [prodVals]);
     }
 
     // 3. Process Deliveries (needs boy IDs from employees table)

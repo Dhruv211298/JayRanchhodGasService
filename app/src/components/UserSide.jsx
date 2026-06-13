@@ -206,8 +206,9 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                     { label: "Cash Total", align: "right" },
                     { label: "Online Total", align: "right" },
                     { label: "Closing", align: "right" },
+                    { label: "⚠️ Shortage / Stolen", align: "right" },
                     { label: "Remarks", align: "left" }
-                  ].map((xh) => <th key={xh.label} style={{ textAlign: xh.align }}>{xh.label}</th>)}
+                  ].map((xh) => <th key={xh.label} style={{ textAlign: xh.align, ...(xh.label.includes("Shortage") ? { color: "#f59e0b", whiteSpace: "nowrap" } : {}) }}>{xh.label}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -235,6 +236,24 @@ export function DailyEntry({ entry, setEntry, calcs: passedCalcs, onSave, saved,
                       <td style={{ color: T.success, fontWeight: 700, textAlign: "right" }} title={`Refill (Cash): ${inr(num(p.sell) * num(p.rate))} | SBC: ${inr(num(p.sbc) * num(p.sbcRate))} | DBC: ${inr(num(p.dbc) * num(p.dbcRate))}`}>{inr(cashTotal)}</td>
                       <td style={{ color: T.blue, fontWeight: 700, textAlign: "right" }}>{inr(onlineTotal)}</td>
                       <td style={{ color: closing < 0 ? T.danger : T.ink, fontWeight: 600, textAlign: "right" }}>{closing}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <input
+                          className="inp-inline"
+                          type="number"
+                          placeholder="0"
+                          value={p.shortage || ""}
+                          onChange={(e) => setProduct(i, "shortage", e.target.value)}
+                          readOnly={!canEdit}
+                          title="Shortage / Stolen — reminder only, does not affect stock"
+                          style={{
+                            textAlign: "right",
+                            border: num(p.shortage) > 0 ? "1.5px solid #f59e0b" : undefined,
+                            background: num(p.shortage) > 0 ? "rgba(245,158,11,0.08)" : undefined,
+                            color: num(p.shortage) > 0 ? "#d97706" : undefined,
+                            fontWeight: num(p.shortage) > 0 ? 700 : undefined,
+                          }}
+                        />
+                      </td>
                       <td style={{ width: 140 }}><input className="inp-inline left" type="text" placeholder="Note..." value={p.remarks || ""} onChange={(e) => setProduct(i, "remarks", e.target.value)} readOnly={!canEdit} /></td>
                     </tr>
                   );
